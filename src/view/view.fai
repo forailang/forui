@@ -1,0 +1,332 @@
+use std.array
+
+# ── Event handler types ─────────────────────────────────────────────
+type def ClickAction
+    @return Void
+end
+
+type def ChangeAction
+    @param newValue String
+    @return Void
+end
+
+type Events
+  onClick ClickAction?
+  onChange ChangeAction?
+end
+
+# Create empty events (all null).
+def emptyEvents
+    @return Events
+do
+  Events(onClick: null, onChange: null)
+end
+
+type ViewNode
+  kind String
+  key String
+  props Dictionary
+  children ViewNode[]
+  events Events
+end
+
+# ── Test helpers ────────────────────────────────────────────────────
+# ViewNode constructors used by both view and diff tests. They live
+# here (next to ViewNode itself) so view doesn't need to import from
+# diff, which would create a cycle.
+# Construct a minimal ViewNode for use in tests.
+def testNode
+    @param kind String
+    @return ViewNode
+do
+  ViewNode(kind: kind, key: '', props: {}, children: [], events: emptyEvents())
+end
+
+# Construct a ViewNode with a single string prop for use in tests.
+def testNodeWithProp
+    @param kind String
+    @param propKey String
+    @param value String
+    @return ViewNode
+do
+  let props = set({}, propKey, value)
+  ViewNode(kind: kind, key: '', props: props, children: [], events: emptyEvents())
+end
+
+# Construct a ViewNode with pre-built children for use in tests.
+def testNodeWithChildren
+    @param kind String
+    @param children ViewNode[]
+    @return ViewNode
+do
+  ViewNode(kind: kind, key: '', props: {}, children: children, events: emptyEvents())
+end
+
+# ── Tree building context ───────────────────────────────────────────
+# A flat stack with frame markers. Container components push a frame,
+# run the children block, then pop to collect what was registered.
+type def Children
+    @return Void
+end
+
+var treeStack ViewNode[] = []
+
+var frameStarts Int[] = []
+
+# ── Composition pattern
+# 
+# Reusable layout shells — a Section, Card, Panel, etc. — must accept
+# a `Children` closure parameter rather than a pre-built `ViewNode`:
+# 
+# def Section                          # ✓ right
+# @param title String
+# @param builder Children
+# @return ViewNode
+# do
+# let card = VStack do
+# Label(title)
+# builder()
+# end
+# card.padding(16)
+# end
+# 
+# # Call site
+# Section('Title', do
+# Label('inside the card')
+# Button('OK')
+# end)
+# 
+# This works because a ViewNode constructor (VStack/HStack/Button/...)
+# eagerly registers its result into whichever frame is active at
+# construction time. If a helper accepts a ViewNode parameter instead,
+# the node was already registered in the CALLER's frame before the
+# helper ran — it then renders as a sibling of the helper rather than
+# inside it, and the helper's container only sees the nodes it built
+# locally. The Children-closure form defers construction until the
+# closure runs inside the helper's own frame.
+# Push a new frame.
+def pushFrame
+    @return Void
+do
+  frameStarts = array.append(frameStarts, length(treeStack))
+end
+
+# Pop frame and return collected children.
+def popFrame
+    @return ViewNode[]
+do
+  let depth = length(frameStarts) - 1
+  let start = frameStarts[depth]
+  let total = length(treeStack)
+  let children = array.slice(treeStack, start, total)
+  treeStack = array.slice(treeStack, 0, start)
+  frameStarts = array.slice(frameStarts, 0, depth)
+  children
+end
+
+# Register a completed node in the current frame.
+def registerNode
+    @param node ViewNode
+    @return Void
+do
+  treeStack = array.append(treeStack, node)
+end
+
+# Replace the last registered node (used by modifiers to update in-place).
+def replaceLastNode
+    @param node ViewNode
+    @return Void
+do
+  let last = length(treeStack) - 1
+  if last >= 0
+    treeStack[last] = node
+  end
+end
+
+# Build a container node from a children block.
+def buildContainer
+    @param kind String
+    @param props Dictionary
+    @param children Children
+    @return ViewNode
+do
+  pushFrame()
+  children()
+  let kids = popFrame()
+  let node = ViewNode(kind: kind, key: '', props: props, children: kids, events: emptyEvents())
+  registerNode(node)
+  node
+end
+
+# ── Tree helpers ────────────────────────────────────────────────────
+# Number of direct children on a node. Use in tests against the tree
+# returned by `testMount`.
+# 
+# ```fai
+# let tree = testMount(Page)
+# assert.equals(childCount(tree), 3)
+# ```
+def childCount
+    @param node ViewNode
+    @return Int
+do
+  array.length(node.children)
+end
+
+# Direct child at `index` (0-based). Out-of-range indexes trap.
+# 
+# ```fai
+# let label = getChild(testMount(Page), 0)
+# assert.equals(label.kind, 'Label')
+# ```
+def getChild
+    @param node ViewNode
+    @param index Int
+    @return ViewNode
+do
+  node.children[index]
+end
+
+# Read a String prop by key. Returns `null` when the prop is missing.
+# Use with `unwrap(..., fallback)` for safe reads.
+# 
+# ```fai
+# assert.equals(unwrap(getProp(label, 'text'), ''), 'Welcome')
+# ```
+def getProp
+    @param node ViewNode
+    @param key String
+    @return String?
+do
+  getString(node.props, key)
+end
+
+# Read an Int prop by key. Returns `null` when the prop is missing.
+# 
+# ```fai
+# let padding = unwrap(getIntProp(node, 'padding'), 0)
+# ```
+def getIntProp
+    @param node ViewNode
+    @param key String
+    @return Int?
+do
+  getInt(node.props, key)
+end
+
+# True when a prop with this key is set on the node (regardless of type).
+# 
+# ```fai
+# assert.isTrue(hasProp(tree, 'cornerRadius'))
+# ```
+def hasProp
+    @param node ViewNode
+    @param key String
+    @return Bool
+do
+  hasKey(node.props, key)
+end
+
+# Find the first descendant whose `kind` matches (e.g. 'Label', 'Button',
+# 'VStack'). Depth-first. Returns `null` if no match. Primary tool for
+# writing UI tests without worrying about tree depth.
+# 
+# ```fai
+# let tree = testMount(Page)
+# let btn = findByKind(tree, 'Button')
+# assert.isTrue(btn?)
+# ```
+def findByKind
+    @param node ViewNode
+    @param targetKind String
+    @return ViewNode?
+do
+  if node.kind == targetKind
+    node
+  else
+    var result ViewNode? = null
+    for child in node.children
+      if result == null
+        result = findByKind(child, targetKind)
+      end
+    end
+    result
+  end
+end
+
+# Find the first descendant whose string prop `key` equals `value`.
+# Depth-first. Returns `null` if no match. Handy for locating a specific
+# Label or Button by its text in tests.
+# 
+# ```fai
+# let tree = testMount(Page)
+# let submit = findByProp(tree, 'text', 'Submit')
+# assert.isTrue(submit?)
+# ```
+def findByProp
+    @param node ViewNode
+    @param key String
+    @param value String
+    @return ViewNode?
+do
+  let prop = getString(node.props, key)
+  if prop? and prop! == value
+    node
+  else
+    var result ViewNode? = null
+    for child in node.children
+      if result == null
+        result = findByProp(child, key, value)
+      end
+    end
+    result
+  end
+end
+
+test findByKind
+it 'finds a direct child by kind'
+  let label = testNode('Label')
+  let root = testNodeWithChildren('VStack', [
+    label
+  ])
+  let found = findByKind(root, 'Label')
+  assert.isNotNull(found)
+  assert.equals(found!.kind, 'Label')
+end
+it 'returns null when kind not found'
+  let root = testNode('VStack')
+  let found = findByKind(root, 'Button')
+  assert.isNull(found)
+end
+it 'finds deeply nested node'
+  let btn = testNode('Button')
+  let inner = testNodeWithChildren('HStack', [
+    btn
+  ])
+  let outer = testNodeWithChildren('VStack', [
+    inner
+  ])
+  let found = findByKind(outer, 'Button')
+  assert.isNotNull(found)
+end
+end
+
+test findByProp
+it 'finds node by prop value'
+  let label = testNodeWithProp('Label', 'text', 'hello')
+  let root = testNodeWithChildren('VStack', [
+    label
+  ])
+  let found = findByProp(root, 'text', 'hello')
+  assert.isNotNull(found)
+  assert.equals(found!.kind, 'Label')
+end
+it 'returns null when prop value not found'
+  let label = testNodeWithProp('Label', 'text', 'hello')
+  let root = testNodeWithChildren('VStack', [
+    label
+  ])
+  let found = findByProp(root, 'text', 'world')
+  assert.isNull(found)
+end
+end

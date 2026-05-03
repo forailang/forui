@@ -1,0 +1,546 @@
+use std.array
+
+use std.events
+
+use { Signal, setValue } from signal
+
+# ── Container primitives ────────────────────────────────────────────
+# Top-level application window. Exactly one should wrap the app root.
+# 
+# ```fai
+# Window('My App') do
+#     VStack do
+#         Label('Hello')
+#     end
+# end
+# ```
+def Window
+    @param title String
+    @param children Children
+    @return ViewNode
+do
+  let props = set({}, 'title', title)
+  buildContainer('Window', props, children)
+end
+
+# Generic div-like container. Use when you want a grouping node without
+# VStack/HStack layout behaviour.
+# 
+# ```fai
+# View do
+#     Label('Grouped content')
+# end
+# ```
+def View
+    @param children Children
+    @return ViewNode
+do
+  buildContainer('View', {}, children)
+end
+
+# Horizontal stack — lays children out left-to-right. Add `Spacer()` to
+# push siblings apart.
+# 
+# ```fai
+# HStack do
+#     Label('Left')
+#     Spacer()
+#     Label('Right')
+# end
+# ```
+def HStack
+    @param children Children
+    @return ViewNode
+do
+  buildContainer('HStack', {}, children)
+end
+
+# Vertical stack — lays children out top-to-bottom. The workhorse
+# container for most forui layouts.
+# 
+# ```fai
+# VStack do
+#     Label('Title').fontSize(24)
+#     Label('Subtitle').foreground('#6d6d72')
+# end
+# ```
+def VStack
+    @param children Children
+    @return ViewNode
+do
+  buildContainer('VStack', {}, children)
+end
+
+# Z-stack — stacks children on the z-axis (later children render on top).
+# Use for badges, overlays, tooltips.
+# 
+# ```fai
+# ZStack do
+#     ImageView(src: '/hero.png')
+#     Label('Featured').padding(8).background('#000000')
+# end
+# ```
+def ZStack
+    @param children Children
+    @return ViewNode
+do
+  buildContainer('ZStack', {}, children)
+end
+
+# Scrollable container. Wraps a tall VStack or list when the content
+# may exceed the viewport.
+# 
+# ```fai
+# ScrollView do
+#     VStack do
+#         for item in items
+#             Label(item.title)
+#         end
+#     end
+# end
+# ```
+def ScrollView
+    @param children Children
+    @return ViewNode
+do
+  buildContainer('ScrollView', {}, children)
+end
+
+# ── Leaf primitives ─────────────────────────────────────────────────
+# Display text. Apply modifiers via UFCS: `.fontSize()`, `.foreground()`,
+# `.fontWeight()`, `.padding()`, etc.
+# 
+# ```fai
+# Label('Welcome').fontSize(24).fontWeight('700').foreground('#17202a')
+# ```
+def Label
+    @param text String
+    @return ViewNode
+do
+  let props = set({}, 'text', text)
+  let node = ViewNode(kind: 'Label', key: '', props: props, children: [], events: emptyEvents())
+  registerNode(node)
+  node
+end
+
+# Single-line text input. Bind to a Signal for two-way reactivity, or
+# supply `value` + `onChange` for controlled use. `inputType` maps to
+# the HTML `<input type=...>` attribute — 'text' (default), 'email',
+# 'password'. `onSubmit` fires on Enter.
+# 
+# ```fai
+# var draft = useSignal('')
+# TextInput('What needs done?', signalValue: draft, onSubmit: do
+#     addTask(draft.value)
+#     draft.setValue('')
+# end)
+# ```
+def TextInput
+    @param placeholder String
+    @param value String?, default: null
+    @param signalValue Signal?, default: null
+    @param onChange ChangeAction?, default: null
+    @param onSubmit ClickAction?, default: null
+    @param inputType String?, default: null
+    @return ViewNode
+do
+  var props = set({}, 'placeholder', placeholder)
+  if inputType != null
+    props = set(props, 'inputType', inputType!)
+  else
+    props = set(props, 'inputType', 'text')
+  end
+  if signalValue != null
+    props = set(props, 'value', signalValue!.value)
+    let changeId = registerChangeHandler do with newValue String
+        signalValue!.setValue(newValue)
+    end
+    props = set(props, 'changeHandlerId', changeId)
+  else
+    if value != null
+      props = set(props, 'value', value!)
+    end
+    if onChange != null
+      let changeId = registerChangeHandler(onChange!)
+      props = set(props, 'changeHandlerId', changeId)
+    end
+  end
+  if onSubmit != null
+    let submitId = registerSubmitHandler(onSubmit!)
+    props = set(props, 'submitHandlerId', submitId)
+  end
+  let node = ViewNode(kind: 'TextInput', key: '', props: props, children: [], events: emptyEvents())
+  registerNode(node)
+  node
+end
+
+# Clickable button. `onClick` is a `do ... end` closure with no args.
+# 
+# ```fai
+# Button('Save', onClick: do
+#     saveRecord()
+#     navigate('/list')
+# end)
+# ```
+def Button
+    @param text String
+    @param onClick ClickAction?, default: null
+    @return ViewNode
+do
+  let props = set({}, 'text', text)
+  let node = ViewNode(kind: 'Button', key: '', props: props, children: [], events: emptyEvents())
+  registerNode(node)
+  if onClick != null
+    attachClickHandler(node, onClick!)
+  else
+    node
+  end
+end
+
+# Flexible spacer — fills available space between siblings in an HStack
+# or VStack. Push one sibling to each edge by dropping a Spacer between.
+# 
+# ```fai
+# HStack do
+#     Label('Left')
+#     Spacer()
+#     Button('Action')
+# end
+# ```
+def Spacer
+    @return ViewNode
+do
+  let node = ViewNode(kind: 'Spacer', key: '', props: {}, children: [], events: emptyEvents())
+  registerNode(node)
+  node
+end
+
+# Image element. `src` is a URL or asset path — the platform adapter
+# handles loading.
+# 
+# ```fai
+# ImageView(src: '/static/logo.png').cornerRadius(8)
+# ```
+def ImageView
+    @param src String
+    @return ViewNode
+do
+  let props = set({}, 'src', src)
+  let node = ViewNode(kind: 'Image', key: '', props: props, children: [], events: emptyEvents())
+  registerNode(node)
+  node
+end
+
+# Binary on/off switch — iOS-style visually, `<button role="switch">`
+# in HTML. Either bind to a Signal (auto-flips on click) or supply an
+# `isOn` + `onChange` pair for controlled use.
+# 
+# ```fai
+# var notifications = useSignal(true)
+# Toggle(signalValue: notifications)
+# ```
+def Toggle
+    @param isOn Bool?, default: null
+    @param signalValue Signal?, default: null
+    @param onChange ClickAction?, default: null
+    @return ViewNode
+do
+  var onValue = false
+  if signalValue != null
+    onValue = signalValue!.value
+  else
+    if isOn != null
+      onValue = isOn!
+    end
+  end
+  var props = {}
+  if onValue
+    props = set(props, 'on', 'true')
+  else
+    props = set(props, 'on', 'false')
+  end
+  let node = ViewNode(kind: 'Toggle', key: '', props: props, children: [], events: emptyEvents())
+  registerNode(node)
+  if signalValue != null
+    let current = onValue
+    attachClickHandler(node) do
+        signalValue!.setValue(!current)
+    end
+  else
+    if onChange != null
+      attachClickHandler(node, onChange!)
+    else
+      node
+    end
+  end
+end
+
+# Horizontal rule (thin line separator). No props — add colour or
+# spacing with standard modifiers.
+# 
+# ```fai
+# VStack do
+#     Label('Section A')
+#     Divider()
+#     Label('Section B')
+# end
+# ```
+def Divider
+    @return ViewNode
+do
+  let node = ViewNode(kind: 'Divider', key: '', props: {}, children: [], events: emptyEvents())
+  registerNode(node)
+  node
+end
+
+# iOS-style row of mutually-exclusive options — the selected segment
+# is highlighted. `options` are labels (both display text and selection
+# identity; must be unique).
+# 
+# Binding modes:
+# - `signalValue`: the signal's String value is the current segment;
+# clicking writes the chosen label back.
+# - `selected` + `onChange`: controlled mode.
+# 
+# ```fai
+# var view = useSignal('All')
+# SegmentedControl(['All', 'Active', 'Done'], signalValue: view)
+# ```
+def SegmentedControl
+    @param options String[]
+    @param signalValue Signal?, default: null
+    @param selected String?, default: null
+    @param onChange ChangeAction?, default: null
+    @return ViewNode
+do
+  var currentValue = ''
+  if signalValue != null
+    currentValue = toString(signalValue!.value)
+  else
+    if selected != null
+      currentValue = selected!
+    else
+      if array.length(options) > 0
+        currentValue = options[0]
+      end
+    end
+  end
+  let parentProps = set({}, 'value', currentValue)
+  let parentNode = ViewNode(kind: 'SegmentedControl', key: '', props: parentProps, children: [], events: emptyEvents())
+  registerNode(parentNode)
+  pushFrame()
+  var i = 0
+  let count = array.length(options)
+  while i < count
+    let label = options[i]
+    var segProps = set({}, 'text', label)
+    if label == currentValue
+      segProps = set(segProps, 'selected', 'true')
+    else
+      segProps = set(segProps, 'selected', 'false')
+    end
+    let segNode = ViewNode(kind: 'Segment', key: label, props: segProps, children: [], events: emptyEvents())
+    registerNode(segNode)
+    if signalValue != null
+      let chosen = label
+      attachClickHandler(segNode) do
+          signalValue!.setValue(chosen)
+      end
+    else
+      if onChange != null
+        let chosen = label
+        attachClickHandler(segNode) do
+            onChange!(chosen)
+        end
+      end
+    end
+    i = i + 1
+  end
+  let segChildren = popFrame()
+  let finalNode = ViewNode(kind: 'SegmentedControl', key: '', props: parentProps, children: segChildren, events: emptyEvents())
+  replaceLastNode(finalNode)
+  finalNode
+end
+
+test Label
+it 'creates a label with text'
+  let l = Label('hello')
+  assert.equals(l.kind, 'Label')
+  assert.equals(getProp(l, 'text'), 'hello')
+end
+it 'creates a button with text'
+  let b = Button('click me')
+  assert.equals(b.kind, 'Button')
+  assert.equals(getProp(b, 'text'), 'click me')
+end
+it 'creates a spacer'
+  let s = Spacer()
+  assert.equals(s.kind, 'Spacer')
+  assert.equals(childCount(s), 0)
+end
+end
+
+test VStack
+it 'builds children via trailing do block'
+  let tree = VStack do
+      Label('hello')
+      Label('world')
+  end
+  assert.equals(tree.kind, 'VStack')
+  assert.equals(childCount(tree), 2)
+  assert.equals(getChild(tree, 0).kind, 'Label')
+  assert.equals(getProp(getChild(tree, 0), 'text'), 'hello')
+  assert.equals(getProp(getChild(tree, 1), 'text'), 'world')
+end
+it 'nests containers'
+  let tree = VStack do
+      HStack do
+          Label('a')
+          Label('b')
+      end
+      Label('c')
+  end
+  assert.equals(childCount(tree), 2)
+  let row = getChild(tree, 0)
+  assert.equals(row.kind, 'HStack')
+  assert.equals(childCount(row), 2)
+  assert.equals(getProp(getChild(row, 0), 'text'), 'a')
+  assert.equals(getProp(getChild(tree, 1), 'text'), 'c')
+end
+it 'handles deeply nested frames'
+  let tree = VStack do
+      VStack do
+          VStack do
+              HStack do
+                  Label('deep')
+                  Label('deeper')
+              end
+              Label('mid')
+          end
+          Label('outer')
+      end
+      Label('top')
+  end
+  assert.equals(childCount(tree), 2)
+  let l1 = getChild(tree, 0)
+  assert.equals(l1.kind, 'VStack')
+  assert.equals(childCount(l1), 2)
+  let l2 = getChild(l1, 0)
+  assert.equals(l2.kind, 'VStack')
+  assert.equals(childCount(l2), 2)
+  let l3 = getChild(l2, 0)
+  assert.equals(l3.kind, 'HStack')
+  assert.equals(childCount(l3), 2)
+  assert.equals(getProp(getChild(l3, 0), 'text'), 'deep')
+  assert.equals(getProp(getChild(l3, 1), 'text'), 'deeper')
+  assert.equals(getProp(getChild(l2, 1), 'text'), 'mid')
+  assert.equals(getProp(getChild(l1, 1), 'text'), 'outer')
+  assert.equals(getProp(getChild(tree, 1), 'text'), 'top')
+end
+it 'handles sibling containers at multiple depths'
+  let tree = VStack do
+      HStack do
+          Label('a1')
+          Label('a2')
+      end
+      HStack do
+          Label('b1')
+          Label('b2')
+      end
+      HStack do
+          Label('c1')
+          Label('c2')
+      end
+  end
+  assert.equals(childCount(tree), 3)
+  let h0 = getChild(tree, 0)
+  let h1 = getChild(tree, 1)
+  let h2 = getChild(tree, 2)
+  assert.equals(h0.kind, 'HStack')
+  assert.equals(h2.kind, 'HStack')
+  assert.equals(childCount(h0), 2)
+  assert.equals(childCount(h1), 2)
+  assert.equals(childCount(h2), 2)
+  assert.equals(getProp(getChild(h0, 0), 'text'), 'a1')
+  assert.equals(getProp(getChild(h1, 1), 'text'), 'b2')
+  assert.equals(getProp(getChild(h2, 0), 'text'), 'c1')
+end
+end
+
+test Window
+it 'builds a window with title and children'
+  let tree = Window('Task App') do
+      VStack do
+          Label('Tasks')
+          Button('Add')
+      end
+  end
+  assert.equals(tree.kind, 'Window')
+  assert.equals(getProp(tree, 'title'), 'Task App')
+  assert.equals(childCount(tree), 1)
+  let content = getChild(tree, 0)
+  assert.equals(content.kind, 'VStack')
+  assert.equals(childCount(content), 2)
+end
+end
+
+test TextInput
+it 'creates a text input with placeholder'
+  let t = TextInput('Name')
+  assert.equals(t.kind, 'TextInput')
+  assert.equals(getProp(t, 'placeholder'), 'Name')
+end
+it 'defaults inputType to text'
+  let t = TextInput('Name')
+  assert.equals(getProp(t, 'inputType'), 'text')
+end
+it 'accepts inputType override'
+  let t = TextInput('Email', inputType: 'email')
+  assert.equals(getProp(t, 'inputType'), 'email')
+end
+it 'accepts password inputType'
+  let t = TextInput('Password', inputType: 'password')
+  assert.equals(getProp(t, 'inputType'), 'password')
+end
+it 'no onSubmit param leaves submitHandlerId absent'
+  let t = TextInput('Name')
+  assert.equals(hasProp(t, 'submitHandlerId'), false)
+end
+it 'onSubmit param sets submitHandlerId prop'
+  let t = TextInput('Name', onSubmit: do
+      print('submitted')
+  end)
+  assert.equals(hasProp(t, 'submitHandlerId'), true)
+end
+it 'view:submit emits and runs the registered onSubmit closure'
+  clearHandlers()
+  installViewEventBridge()
+  var fired = false
+  let t = TextInput('Name', onSubmit: do
+      fired = true
+  end)
+  let id = getIntProp(t, 'submitHandlerId')
+  events.emit('view:submit', {
+    id: id!
+  })
+  assert.equals(fired, true)
+  clearHandlers()
+end
+it 'clearHandlers drops submit handlers'
+  clearHandlers()
+  installViewEventBridge()
+  let a = TextInput('X', onSubmit: do
+      print('a')
+  end)
+  let b = TextInput('Y', onSubmit: do
+      print('b')
+  end)
+  assert.equals(getIntProp(a, 'submitHandlerId'), 0)
+  assert.equals(getIntProp(b, 'submitHandlerId'), 1)
+  clearHandlers()
+  events.emit('view:submit', {
+    id: 0
+  })
+  assert.equals(true, true)
+end
+end

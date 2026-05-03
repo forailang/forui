@@ -1,0 +1,277 @@
+use std.array
+
+var hookSignals Signal[] = []
+
+var hookIndex = 0
+
+# ── Hooks — component-scoped signals ────────────────────────────────
+# Signals created with useSignal persist across re-renders. On the
+# first render they're created. On re-renders the existing signal is
+# returned based on call order (like React hooks).
+# Save the current hook signal array (value copy via fai value semantics).
+def saveHookState
+    @return Signal[]
+do
+  hookSignals
+end
+
+# Restore a previously saved hook signal array.
+def restoreHookState
+    @param saved Signal[]
+    @return Void
+do
+  hookSignals = saved
+end
+
+# Reset hook index before each render. Existing signals are preserved.
+def resetHooks
+    @return Void
+do
+  hookIndex = 0
+end
+
+# Clear all hook signals. Call on route changes so the new page gets
+# fresh signals rather than reusing slots from the previous page.
+def clearHookSignals
+    @return Void
+do
+  hookSignals = []
+end
+
+# The primary way to create reactive state in a component. Returns a
+# Signal that persists across re-renders. `initialValue` is used on
+# first render only. Pass an optional trailing `do ... end` loader
+# closure to fetch async data — the signal auto-loads on first render
+# and can be refreshed later with `reload()`.
+# 
+# Always declare with `var`; mutating helpers (`setValue`, `reload`,
+# `setError`) require a mutable binding.
+# 
+# ```fai
+# # Simple local state.
+# var count = useSignal(0)
+# 
+# # Async loader — the signal goes through loading → loaded/error.
+# var tasks = useSignal([]) do
+#     getTasks()
+# end
+# ```
+def useSignal
+    @type T
+    @param initialValue $T
+    @param loader Loader?, default: null
+    @return Signal
+do
+  if hookIndex >= length(hookSignals)
+    var s = createSignal(initialValue, loader)
+    hookSignals = array.append(hookSignals, s)
+    hookIndex = hookIndex + 1
+    if loader != null
+      if ssrMode
+        s.status = SignalStatus.loading
+      else
+        s.status = SignalStatus.loading
+        nowait doLoad(s, loader!)
+      end
+    end
+    s
+  else
+    let s = hookSignals[hookIndex]
+    hookIndex = hookIndex + 1
+    s
+  end
+end
+
+# ── Data Loading ───────────────────────────────────────────────────
+# Load data into a signal on first render. Stores the loader for
+# later reload() calls. Skips if already loaded or loading.
+# Usage: useLoad(tasks, getTasks)
+def useLoad
+    @param signal Signal, mutable
+    @param loader Loader
+    @return Void
+do
+  signal.loader = loader
+  if signal.status == SignalStatus.initial
+    signal.status = SignalStatus.loading
+    if !ssrMode
+      nowait doLoad(signal, loader)
+    end
+  end
+end
+
+# Re-run a signal's loader closure. Useful for refresh buttons or after
+# a mutation that should update the fetched data.
+# 
+# ```fai
+# var tasks = useSignal([]) do
+#     getTasks()
+# end
+# Button('Refresh', onClick: do
+#     tasks.reload()
+# end)
+# ```
+def reload
+    @param signal Signal, mutable
+    @return Void
+do
+  if signal.loader != null
+    signal.status = SignalStatus.loading
+    nowait doLoad(signal, signal.loader!)
+  end
+end
+
+# Internal: execute the loader and update the signal.
+def doLoad
+    @param signal Signal, mutable
+    @param loader Loader
+    @return Void
+do
+  try
+    let data = loader()
+    signal.value = data
+    signal.status = SignalStatus.loaded
+    signal.error = null
+    markDirty(signal.id)
+    notifyChange()
+  catch e
+    signal.status = SignalStatus.error
+    signal.error = e.message
+    markDirty(signal.id)
+    notifyChange()
+  end
+end
+
+test saveHookState
+it 'returns the current hook signal array'
+  let snap = saveHookState()
+  assert.equals(array.length(snap), array.length(hookSignals))
+end
+end
+
+test restoreHookState
+it 'replaces hookSignals with the supplied snapshot'
+  resetHooks()
+  let before = saveHookState()
+  let s = createSignal(0)
+  hookSignals = [s]
+  restoreHookState(before)
+  assert.equals(array.length(hookSignals), array.length(before))
+end
+end
+
+test resetHooks
+it 'rewinds hookIndex to zero'
+  hookIndex = 42
+  resetHooks()
+  assert.equals(hookIndex, 0)
+end
+end
+
+test clearHookSignals
+it 'empties the hookSignals array'
+  hookSignals = [createSignal(0) createSignal(1)]
+  clearHookSignals()
+  assert.equals(array.length(hookSignals), 0)
+end
+end
+
+test useSignal
+it 'appends a fresh signal to hookSignals on the first call'
+  resetHooks()
+  clearHookSignals()
+  let s = useSignal(42)
+  assert.equals(array.length(hookSignals), 1)
+  assert.equals(hookIndex, 1)
+end
+it 'returns the same signal on repeat calls at the same index'
+  resetHooks()
+  clearHookSignals()
+  let a = useSignal(7)
+  resetHooks()
+  let b = useSignal(7)
+  assert.equals(a.id == b.id, true)
+end
+end
+
+var useLoadLoaderRan = false
+
+# Loader used by the `useLoad` test — flips a flag so we can assert
+# the closure was stored.
+def useLoadMarkerLoader
+    @return Int
+do
+  useLoadLoaderRan = true
+  1
+end
+
+test useLoad
+it 'stores the loader on the signal'
+  resetHooks()
+  clearHookSignals()
+  var s = createSignal(0)
+  useLoad(s, useLoadMarkerLoader)
+  assert.equals(s.loader != null, true)
+end
+it 'moves an initial signal into the loading status'
+  resetHooks()
+  clearHookSignals()
+  enterSsrMode()
+  var s = createSignal(0)
+  useLoad(s, useLoadMarkerLoader)
+  assert.equals(s.status, SignalStatus.loading)
+  exitSsrMode()
+end
+end
+
+var reloadLoaderRan = false
+
+# Loader used by the `reload` test — flips a flag so we can assert
+# the closure actually fired.
+def reloadMarkerLoader
+    @return Int
+do
+  reloadLoaderRan = true
+  1
+end
+
+test reload
+it 'runs the stored loader when one is attached'
+  resetHooks()
+  enterSsrMode()
+  reloadLoaderRan = false
+  var s = createSignal(0, reloadMarkerLoader)
+  reload(s)
+  assert.equals(reloadLoaderRan, true)
+  exitSsrMode()
+end
+end
+
+test doLoad
+it 'invokes the loader immediately'
+  var s = createSignal(0)
+  var ran = false
+  doLoad(s) do
+      ran = true
+  end
+  assert.equals(ran, true)
+end
+end
+
+test reloadMarkerLoader
+it 'flips the reload capture flag and returns 1'
+  reloadLoaderRan = false
+  let got = reloadMarkerLoader()
+  assert.equals(reloadLoaderRan, true)
+  assert.equals(got, 1)
+end
+end
+
+test useLoadMarkerLoader
+it 'flips the useLoad capture flag and returns 1'
+  useLoadLoaderRan = false
+  let got = useLoadMarkerLoader()
+  assert.equals(useLoadLoaderRan, true)
+  assert.equals(got, 1)
+end
+end

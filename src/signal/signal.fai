@@ -1,0 +1,591 @@
+use std.array
+
+enum SignalStatus
+  initial
+  loading
+  loaded
+  error
+end
+
+# ── Signal Status ───────────────────────────────────────────────────
+# Lifecycle state of a signal: initial (never loaded), loading (fetch in progress),
+# loaded (value ready), or error (last fetch failed).
+# A function that fetches or computes the signal's value asynchronously.
+# Assigned to a signal via createSignal; called automatically by useLoad.
+type def Loader
+    @return $T
+end
+
+type Signal
+  id Int
+  value $T
+  status SignalStatus
+  error String?
+  loader Loader?
+end
+
+var nextSignalId = 0
+
+var dirtySignalIds Int[] = []
+
+var ssrMode = false
+
+# ── Signal Registry (dirty tracking only) ───────────────────────────
+# Enter SSR mode: signal loaders run synchronously instead of via nowait.
+def enterSsrMode
+    @return Void
+do
+  ssrMode = true
+end
+
+# Exit SSR mode.
+def exitSsrMode
+    @return Void
+do
+  ssrMode = false
+end
+
+# ── Signal Creation ─────────────────────────────────────────────────
+# Create a new signal with an initial value and optional loader.
+def createSignal
+    @type T
+    @param initialValue $T
+    @param loader Loader?, default: null
+    @return Signal
+do
+  let id = nextSignalId
+  nextSignalId = nextSignalId + 1
+  Signal(id: id, value: initialValue, status: SignalStatus.initial, error: null, loader: loader)
+end
+
+# ── Dirty Tracking ──────────────────────────────────────────────────
+# Mark a signal ID as dirty.
+def markDirty
+    @param id Int
+    @return Void
+do
+  var found = false
+  for existing in dirtySignalIds
+    if existing == id
+      found = true
+    end
+  end
+  if !found
+    dirtySignalIds = array.append(dirtySignalIds, id)
+  end
+end
+
+# Check if any signals are dirty.
+def hasDirtySignals
+    @return Bool
+do
+  length(dirtySignalIds) > 0
+end
+
+# Check if a specific signal is dirty.
+def isSignalDirty
+    @param id Int
+    @return Bool
+do
+  var found = false
+  for existing in dirtySignalIds
+    if existing == id
+      found = true
+    end
+  end
+  found
+end
+
+# Clear all dirty flags.
+def clearDirty
+    @return Void
+do
+  dirtySignalIds = []
+end
+
+# Get the list of dirty signal IDs.
+def getDirtyIds
+    @return Int[]
+do
+  dirtySignalIds
+end
+
+# ── Change listener ─────────────────────────────────────────────────
+# The framework registers a callback that runs after any signal change.
+type def ChangeListener
+    @return Void
+end
+
+var onChangeListener ChangeListener? = null
+
+# Register a listener called after any signal mutation.
+def onSignalChange
+    @param listener ChangeListener
+    @return Void
+do
+  onChangeListener = listener
+end
+
+# Notify the listener that a signal changed.
+def notifyChange
+    @return Void
+do
+  if onChangeListener?
+    onChangeListener!()
+  end
+end
+
+# ── Signal Mutation ─────────────────────────────────────────────────
+# These take `signal` as mutable — the caller's signal is modified
+# directly. Each mutation marks the signal as dirty and notifies the
+# framework to re-render.
+# Write a new value to a signal. Marks it loaded (clearing any error)
+# and triggers a re-render. The signal variable must be declared `var`
+# so it can be passed as a mutable argument.
+# 
+# ```fai
+# var count = useSignal(0)
+# Button('Click', onClick: do
+#     count.setValue(count.value + 1)
+# end)
+# ```
+def setValue
+    @param signal Signal, mutable
+    @param newValue $T
+    @return Void
+do
+  signal.value = newValue
+  signal.status = SignalStatus.loaded
+  signal.error = null
+  markDirty(signal.id)
+  notifyChange()
+end
+
+# Mark the signal as loading. Clears error. Marks dirty.
+def setLoading
+    @param signal Signal, mutable
+    @return Void
+do
+  signal.status = SignalStatus.loading
+  signal.error = null
+  markDirty(signal.id)
+  notifyChange()
+end
+
+# Set the signal's value and mark as loaded. Clears error. Marks dirty.
+def setLoaded
+    @param signal Signal, mutable
+    @param newValue $T
+    @return Void
+do
+  signal.value = newValue
+  signal.status = SignalStatus.loaded
+  signal.error = null
+  markDirty(signal.id)
+  notifyChange()
+end
+
+# Mark the signal as errored with a message. Marks dirty.
+def setError
+    @param signal Signal, mutable
+    @param message String
+    @return Void
+do
+  signal.status = SignalStatus.error
+  signal.error = message
+  markDirty(signal.id)
+  notifyChange()
+end
+
+# ── Status Helpers ──────────────────────────────────────────────────
+# True before the signal has ever attempted to load (initial state).
+# Usually transient — signals with loaders move to `loading` immediately.
+# 
+# ```fai
+# if tasks.isInitial()
+#     Label('Ready to load')
+# end
+# ```
+def isInitial
+    @param signal Signal
+    @return Bool
+do
+  signal.status == SignalStatus.initial
+end
+
+# True while a loader is running. Render a spinner or loading message
+# in this branch.
+# 
+# ```fai
+# if tasks.isLoading()
+#     LoadingLabel()
+# end
+# ```
+def isLoading
+    @param signal Signal
+    @return Bool
+do
+  signal.status == SignalStatus.loading
+end
+
+# True once the loader has completed successfully. The signal's `.value`
+# is usable in this state.
+# 
+# ```fai
+# if tasks.isLoaded()
+#     for t in tasks.value
+#         Label(t.text)
+#     end
+# end
+# ```
+def isLoaded
+    @param signal Signal
+    @return Bool
+do
+  signal.status == SignalStatus.loaded
+end
+
+# True when the most recent load failed. Read `signal.error` for the
+# message.
+# 
+# ```fai
+# if tasks.isError()
+#     Label('Error: ' + tasks.error!).foreground('#b3261e')
+# end
+# ```
+def isError
+    @param signal Signal
+    @return Bool
+do
+  signal.status == SignalStatus.error
+end
+
+test createSignal
+it 'creates a signal with initial status and unique id'
+  let s1 = createSignal(42)
+  let s2 = createSignal('hello')
+  assert.equals(s1.value, 42)
+  assert.equals(s1.status, SignalStatus.initial)
+  assert.equals(s1.error, null)
+  assert.equals(s1.id == s2.id, false)
+end
+end
+
+test setValue
+it 'sets value and marks dirty'
+  clearDirty()
+  var s = createSignal(0)
+  s.setValue(99)
+  assert.equals(s.value, 99)
+  assert.equals(s.status, SignalStatus.loaded)
+  assert.equals(isSignalDirty(s.id), true)
+  clearDirty()
+end
+it 'clears error when setting value'
+  clearDirty()
+  var s = createSignal(0)
+  s.setError('oops')
+  s.setValue(42)
+  assert.equals(s.error, null)
+  assert.equals(s.value, 42)
+  clearDirty()
+end
+end
+
+test setLoading
+it 'sets loading status and marks dirty'
+  clearDirty()
+  var s = createSignal(42)
+  s.setLoading()
+  assert.equals(s.status, SignalStatus.loading)
+  assert.equals(s.value, 42)
+  assert.equals(s.error, null)
+  assert.equals(isSignalDirty(s.id), true)
+  clearDirty()
+end
+end
+
+test setLoaded
+it 'sets value and loaded status'
+  clearDirty()
+  var s = createSignal(0)
+  s.setLoading()
+  clearDirty()
+  s.setLoaded(99)
+  assert.equals(s.value, 99)
+  assert.equals(s.status, SignalStatus.loaded)
+  assert.equals(isSignalDirty(s.id), true)
+  clearDirty()
+end
+end
+
+test setError
+it 'sets error status with message and marks dirty'
+  clearDirty()
+  var s = createSignal(0)
+  s.setError('network failure')
+  assert.equals(s.status, SignalStatus.error)
+  assert.equals(s.error, 'network failure')
+  assert.equals(s.value, 0)
+  assert.equals(isSignalDirty(s.id), true)
+  clearDirty()
+end
+end
+
+test clearDirty
+it 'starts clean after clearDirty'
+  clearDirty()
+  assert.equals(hasDirtySignals(), false)
+end
+it 'tracks multiple dirty signals'
+  clearDirty()
+  var s1 = createSignal(1)
+  var s2 = createSignal(2)
+  s1.setValue(10)
+  s2.setValue(20)
+  assert.equals(hasDirtySignals(), true)
+  assert.equals(length(getDirtyIds()), 2)
+  clearDirty()
+end
+it 'does not duplicate dirty ids'
+  clearDirty()
+  var s = createSignal(0)
+  s.setValue(1)
+  s.setValue(2)
+  s.setValue(3)
+  assert.equals(length(getDirtyIds()), 1)
+  clearDirty()
+end
+it 'clearDirty resets'
+  clearDirty()
+  var s = createSignal(0)
+  s.setValue(5)
+  assert.equals(hasDirtySignals(), true)
+  clearDirty()
+  assert.equals(hasDirtySignals(), false)
+end
+end
+
+test isLoading
+it 'reports loading'
+  clearDirty()
+  var s = createSignal(0)
+  s.setLoading()
+  assert.equals(s.isLoading(), true)
+  assert.equals(s.isLoaded(), false)
+  assert.equals(s.isError(), false)
+  clearDirty()
+end
+it 'reports initial status on creation'
+  let s = createSignal(42)
+  assert.equals(s.isInitial(), true)
+  assert.equals(s.isLoaded(), false)
+  assert.equals(s.isLoading(), false)
+end
+it 'reports error'
+  clearDirty()
+  var s = createSignal(0)
+  s.setError('oops')
+  assert.equals(s.isError(), true)
+  assert.equals(s.isLoaded(), false)
+  clearDirty()
+end
+end
+
+test setError
+it 'simulates a data loading cycle'
+  clearDirty()
+  var tasks = createSignal([])
+  assert.equals(tasks.isInitial(), true)
+  tasks.setLoading()
+  assert.equals(tasks.isLoading(), true)
+  assert.equals(isSignalDirty(tasks.id), true)
+  clearDirty()
+  tasks.setLoaded([
+    1
+    2
+    3
+  ])
+  assert.equals(tasks.value[0], 1)
+  assert.equals(tasks.value[2], 3)
+  assert.equals(tasks.isLoaded(), true)
+  assert.equals(isSignalDirty(tasks.id), true)
+  clearDirty()
+  tasks.setValue([
+    1
+    2
+    3
+    4
+  ])
+  assert.equals(length(tasks.value), 4)
+  assert.equals(isSignalDirty(tasks.id), true)
+  clearDirty()
+end
+it 'simulates a data loading error'
+  clearDirty()
+  var data = createSignal('')
+  data.setLoading()
+  clearDirty()
+  data.setError('timeout')
+  assert.equals(data.isError(), true)
+  assert.equals(data.error, 'timeout')
+  assert.equals(data.value, '')
+  assert.equals(isSignalDirty(data.id), true)
+  data.setLoaded('hello')
+  assert.equals(data.isLoaded(), true)
+  assert.equals(data.value, 'hello')
+  assert.equals(data.error, null)
+  clearDirty()
+end
+end
+
+test enterSsrMode
+it 'toggles ssrMode to true'
+  exitSsrMode()
+  enterSsrMode()
+  assert.equals(ssrMode, true)
+  exitSsrMode()
+end
+end
+
+test exitSsrMode
+it 'toggles ssrMode back to false'
+  enterSsrMode()
+  exitSsrMode()
+  assert.equals(ssrMode, false)
+end
+end
+
+test markDirty
+it 'records the id in the dirty list'
+  clearDirty()
+  markDirty(7)
+  assert.equals(isSignalDirty(7), true)
+  clearDirty()
+end
+it 'dedupes repeated ids'
+  clearDirty()
+  markDirty(3)
+  markDirty(3)
+  assert.equals(array.length(getDirtyIds()), 1)
+  clearDirty()
+end
+end
+
+test hasDirtySignals
+it 'is false when the dirty list is empty'
+  clearDirty()
+  assert.equals(hasDirtySignals(), false)
+end
+it 'is true after markDirty'
+  clearDirty()
+  markDirty(1)
+  assert.equals(hasDirtySignals(), true)
+  clearDirty()
+end
+end
+
+test isSignalDirty
+it 'returns true only for ids that were marked'
+  clearDirty()
+  markDirty(5)
+  assert.equals(isSignalDirty(5), true)
+  assert.equals(isSignalDirty(6), false)
+  clearDirty()
+end
+end
+
+test getDirtyIds
+it 'returns the ids marked since last clear'
+  clearDirty()
+  markDirty(1)
+  markDirty(2)
+  let ids = getDirtyIds()
+  assert.equals(array.length(ids), 2)
+  assert.equals(ids[0], 1)
+  assert.equals(ids[1], 2)
+  clearDirty()
+end
+end
+
+var changeCounter = 0
+
+# Local capture used by the onSignalChange / notifyChange tests.
+# Listener that the tests register to count notifications.
+def bumpCounter
+    @return Void
+do
+  changeCounter = changeCounter + 1
+end
+
+test onSignalChange
+it 'registers a listener that runs on notifyChange'
+  changeCounter = 0
+  onSignalChange(bumpCounter)
+  notifyChange()
+  notifyChange()
+  assert.equals(changeCounter, 2)
+end
+end
+
+test notifyChange
+it 'fires the registered listener exactly once per call'
+  onChangeListener = null
+  changeCounter = 0
+  onSignalChange(bumpCounter)
+  notifyChange()
+  notifyChange()
+  assert.equals(changeCounter, 2)
+end
+it 'is a no-op when no listener has been registered'
+  onChangeListener = null
+  changeCounter = 0
+  notifyChange()
+  assert.equals(changeCounter, 0)
+end
+end
+
+test isInitial
+it 'is true for a freshly-created signal'
+  let s = createSignal(0)
+  assert.equals(isInitial(s), true)
+end
+it 'becomes false once a value is set'
+  var s = createSignal(0)
+  s.setValue(1)
+  assert.equals(isInitial(s), false)
+end
+end
+
+test isLoading
+it 'is true while loading'
+  var s = createSignal(0)
+  s.setLoading()
+  assert.equals(isLoading(s), true)
+end
+end
+
+test isLoaded
+it 'is true once loaded'
+  var s = createSignal(0)
+  s.setValue(1)
+  assert.equals(isLoaded(s), true)
+end
+end
+
+test isError
+it 'is true once an error is recorded'
+  var s = createSignal(0)
+  s.setError('boom')
+  assert.equals(isError(s), true)
+end
+end
+
+test bumpCounter
+it 'increments the onSignalChange/notifyChange capture counter'
+  changeCounter = 0
+  bumpCounter()
+  bumpCounter()
+  assert.equals(changeCounter, 2)
+end
+end

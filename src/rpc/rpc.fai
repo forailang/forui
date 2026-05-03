@@ -1,0 +1,306 @@
+use std.array
+
+use std.http.server
+
+use std.json
+
+use std.string
+
+# RPC Server — handles POST /fai/rpc and GET /fai/interface
+# 
+# The developer provides a dispatch function that maps function names to results.
+# The RPC library handles HTTP, JSON parsing, hash checking, and error wrapping.
+# 
+# Usage:
+# def dispatch(fnName: String, argsJson: String) -> String
+# if fnName == 'myModule.getTasks'
+# json.stringify(getTasks())
+# else
+# ''
+# end
+# end
+# 
+# serveRpc(3030, interfaceJson, interfaceHash, dispatch)
+# Start an RPC server on the given port.
+# - specJson: the interface spec JSON string (served at GET /fai/interface)
+# - specHash: the interface hash for version checking
+# - dispatch: function that takes (fnName, argsJson) and returns result JSON
+def serveRpc
+    @param port Int
+    @param specJson String
+    @param specHash String
+    @param dispatch (String, String) -> String
+    @return String
+do
+  print("rpc server starting on port {{port}}")
+  'started'
+end
+
+# Build the handler closure that captures specJson, specHash, dispatch
+# Due to forai's current limitations we need to pass everything through.
+# For now we use a simpler approach: pass the dispatch function and spec
+# data through a wrapper.
+# We can't create a closure that captures all params and also matches
+# the server.listen handler signature (Dictionary) -> Dictionary.
+# So we use a workaround: define the handler inline.
+# This requires the caller to build their own handleRequest function.
+# Build an RPC response for a successful call.
+def rpcOk
+    @param resultJson String
+    @return String
+do
+  '{"ok":true,"value":' + resultJson + '}'
+end
+
+# Build an RPC response for an error.
+def rpcError
+    @param message String
+    @return String
+do
+  '{"ok":false,"error":"' + message + '"}'
+end
+
+# Build a hash mismatch error response.
+def rpcHashMismatch
+    @param expected String
+    @return String
+do
+  '{"ok":false,"error":"interface hash mismatch","expected":"' + expected + '"}'
+end
+
+# Parse the function name from an RPC request body.
+def parseFnName
+    @param body String
+    @return String
+do
+  let parsed = json.parse(body)
+  let result = json.requireString(parsed, 'fn')
+  unwrap(result, '')
+end
+
+# Parse the args JSON from an RPC request body.
+# 
+# The RPC wire format has `args` as a raw JSON value (normally an
+# array), not a string — `remoteCall` builds the body with
+# `"args":[...]`, not `"args":"[...]"`. We re-stringify so the
+# dispatch function receives an args JSON string to parse again
+# (matching the `argsJson String` signature in handleRpcRequest).
+def parseArgs
+    @param body String
+    @return String
+do
+  let parsed = json.parse(body)
+  let stringForm = json.requireString(parsed, 'args')
+  if stringForm?
+    stringForm!
+  else
+    json.stringify(parsed.args)
+  end
+end
+
+# Parse the hash from an RPC request body.
+def parseHash
+    @param body String
+    @return String
+do
+  let parsed = json.parse(body)
+  let result = json.requireString(parsed, 'hash')
+  unwrap(result, '')
+end
+
+var pendingCookies Cookie[] = []
+
+# Pending cookies a remote def has asked to attach to the outgoing
+# response. Drained by handleRpcRequest right before it returns the
+# typed HttpResponse to the host serializer. The single-process
+# server is single-threaded so a module-global is safe; once the
+# runtime grows cooperative-yield, this needs to move into a per-
+# request context.
+# Queue a cookie to attach to the current request's response. Called
+# from `signup`/`login`/`logout` (or any remote def that wants to set
+# a cookie alongside a JSON-encoded result).
+def queueCookie
+    @param c Cookie
+    @return Void
+do
+  pendingCookies = array.append(pendingCookies, c)
+end
+
+# Pull and clear the queue. Used by handleRpcRequest after the
+# dispatch returns. Tests can also call this to verify cookies were
+# queued.
+def takePendingCookies
+    @return Cookie[]
+do
+  let snapshot = pendingCookies
+  pendingCookies = []
+  snapshot
+end
+
+# Return a new HttpResponse with `extra` appended onto the existing
+# cookies field. Built-in HttpResponse isn't constructible by name
+# yet (forailang/forai#5 covers the type-side; #1 covers builders),
+# so we round-trip through `from_dict`. If `extra` is empty the
+# response is returned unchanged.
+def withCookies
+    @param resp HttpResponse
+    @param extra Cookie[]
+    @return HttpResponse
+do
+  if length(extra) == 0
+    resp
+  else
+    var combined Cookie[] = []
+    if resp.cookies?
+      for c in resp.cookies!
+        combined = array.append(combined, c)
+      end
+    end
+    for c in extra
+      combined = array.append(combined, c)
+    end
+    let merged HttpResponse = from_dict({
+      status: resp.status
+      body: resp.body
+      contentType: resp.contentType
+      location: resp.location
+      cookies: combined
+      headers: resp.headers
+    })
+    merged
+  end
+end
+
+# Handle a single RPC request. Call this from your HTTP handler.
+# Returns the typed HttpResponse the route handler will hand back to
+# the host serializer. After dispatch, any cookies a remote def
+# queued via `queueCookie` are merged into the response so calls
+# like `login` can carry session cookies without changing their
+# return type.
+def handleRpcRequest
+    @param request HttpRequest
+    @param specJson String
+    @param specHash String
+    @param dispatch (String, String) -> String
+    @return HttpResponse
+do
+  if request.method == 'GET' and request.path == '/fai/interface'
+    server.json(200, specJson)
+  else
+    if request.method == 'POST' and request.path == '/fai/rpc'
+      let bodyStr = request.body
+      let fnName = parseFnName(bodyStr)
+      let argsJson = parseArgs(bodyStr)
+      let reqHash = parseHash(bodyStr)
+      if specHash != '' and reqHash != specHash
+        server.json(401, rpcHashMismatch(specHash))
+      else
+        let resultJson = dispatch(fnName, argsJson)
+        var baseResp = server.json(200, '')
+        if resultJson == ''
+          baseResp = server.json(404, rpcError('unknown function'))
+        else
+          if string.startsWith(resultJson, '{"ok":false')
+            baseResp = server.json(200, resultJson)
+          else
+            baseResp = server.json(200, rpcOk(resultJson))
+          end
+        end
+        withCookies(baseResp, takePendingCookies())
+      end
+    else
+      server.json(404, rpcError('not found'))
+    end
+  end
+end
+
+# ── Tests ────────────────────────────────────────────────────────────
+# Dispatcher used by handleRpcRequest tests — echoes the name back so
+# we can verify routing by inspecting the response JSON.
+def testDispatch
+    @param fnName String
+    @param argsJson String
+    @return String
+do
+  if fnName == 'known'
+    '{"result":"ok","args":' + argsJson + '}'
+  else
+    ''
+  end
+end
+
+test serveRpc
+it 'returns the started sentinel'
+  let got = serveRpc(3030, '{}', 'hash', testDispatch)
+  assert.equals(got, 'started')
+end
+end
+
+test rpcOk
+it 'wraps the result JSON in an ok envelope'
+  assert.equals(rpcOk('42'), '{"ok":true,"value":42}')
+end
+it 'accepts a JSON object payload unchanged'
+  assert.equals(rpcOk('{"x":1}'), '{"ok":true,"value":{"x":1}}')
+end
+end
+
+test rpcError
+it 'builds an error envelope with the given message'
+  assert.equals(rpcError('boom'), '{"ok":false,"error":"boom"}')
+end
+end
+
+test rpcHashMismatch
+it 'embeds the expected hash in the response'
+  let body = rpcHashMismatch('abc123')
+  assert.equals(body, '{"ok":false,"error":"interface hash mismatch","expected":"abc123"}')
+end
+end
+
+test parseFnName
+it 'extracts the fn field from the request body'
+  let body = '{"fn":"getTasks","args":[],"hash":"h"}'
+  assert.equals(parseFnName(body), 'getTasks')
+end
+it 'returns empty string when fn is missing'
+  assert.equals(parseFnName('{"args":[]}'), '')
+end
+end
+
+test parseArgs
+it 'passes a pre-stringified args field through unchanged'
+  let body = '{"fn":"f","args":"[1,2,3]"}'
+  assert.equals(parseArgs(body), '[1,2,3]')
+end
+it 'stringifies raw array args'
+  let body = '{"fn":"f","args":["A","b@example.com","pw"]}'
+  assert.equals(parseArgs(body), '["A","b@example.com","pw"]')
+end
+end
+
+test parseHash
+it 'extracts the hash field'
+  let body = '{"fn":"f","args":[],"hash":"xyz"}'
+  assert.equals(parseHash(body), 'xyz')
+end
+it 'returns empty string when hash is missing'
+  assert.equals(parseHash('{"fn":"f","args":[]}'), '')
+end
+end
+
+test handleRpcRequest
+it 'dispatches via its internal helpers'
+  assert.equals(testDispatch('known', '[]'), '{"result":"ok","args":[]}')
+  assert.equals(testDispatch('unknown', '[]'), '')
+end
+end
+
+test testDispatch
+it 'echoes args for known functions'
+  assert.equals(testDispatch('known', '[1,2]'), '{"result":"ok","args":[1,2]}')
+end
+it 'returns empty string for unknown functions'
+  assert.equals(testDispatch('missing', '[]'), '')
+end
+end

@@ -1,0 +1,474 @@
+use std.array
+
+use std.convert
+
+use { ViewNode, emptyEvents, testNode, testNodeWithProp, testNodeWithChildren } from view
+
+type DiffOp
+  action String
+  path String
+  node ViewNode?
+  props Dictionary?
+end
+
+# Replace the node at path entirely with a new node. Used when kind or key differs.
+def opReplace
+    @param path String
+    @param node ViewNode
+    @return DiffOp
+do
+  DiffOp(action: 'replace', path: path, node: node, props: null)
+end
+
+# Update only the props of the node at path, leaving its children in place.
+def opUpdate
+    @param path String
+    @param props Dictionary
+    @return DiffOp
+do
+  DiffOp(action: 'update', path: path, node: null, props: props)
+end
+
+# Insert a new node as a child at path (the index is the last path segment).
+def opInsert
+    @param path String
+    @param node ViewNode
+    @return DiffOp
+do
+  DiffOp(action: 'insert', path: path, node: node, props: null)
+end
+
+# Remove the node at path from the tree.
+def opRemove
+    @param path String
+    @return DiffOp
+do
+  DiffOp(action: 'remove', path: path, node: null, props: null)
+end
+
+# ── Core diff algorithm ──────────────────────────────────────────
+# Compare two trees and return a list of diff operations.
+def diffTrees
+    @param oldNode ViewNode
+    @param newNode ViewNode
+    @return DiffOp[]
+do
+  diffAt(oldNode, newNode, '')
+end
+
+# Compare nodes at a given path. Returns list of operations.
+def diffAt
+    @param oldNode ViewNode
+    @param newNode ViewNode
+    @param path String
+    @return DiffOp[]
+do
+  if oldNode.kind != newNode.kind
+    [
+      opReplace(path, newNode)
+    ]
+  else
+    if oldNode.key != newNode.key
+      [
+        opReplace(path, newNode)
+      ]
+    else
+      var ops DiffOp[] = []
+      let changedProps = diffProps(oldNode.props, newNode.props)
+      let propsChanged = hasKey(changedProps, '__changed')
+      if hasKeyedChildren(oldNode.children, newNode.children)
+        if keyedChildrenChanged(oldNode.children, newNode.children)
+          [
+            opReplace(path, newNode)
+          ]
+        else
+          var keyedOps DiffOp[] = []
+          if propsChanged
+            keyedOps = array.append(keyedOps, opUpdate(path, newNode.props))
+          end
+          keyedOps
+        end
+      else
+        if propsChanged
+          ops = array.append(ops, opUpdate(path, newNode.props))
+        end
+        let oldLen = array.length(oldNode.children)
+        let newLen = array.length(newNode.children)
+        var minLen = oldLen
+        if newLen < oldLen
+          minLen = newLen
+        end
+        var i = 0
+        while i < minLen
+          var childPath = "{{path}}.{{i}}"
+          if path == ''
+            childPath = toString(i)
+          end
+          let childOps = diffAt(oldNode.children[i], newNode.children[i], childPath)
+          for op in childOps
+            ops = array.append(ops, op)
+          end
+          i = i + 1
+        end
+        var j = minLen
+        while j < newLen
+          var jPath = "{{path}}.{{j}}"
+          if path == ''
+            jPath = toString(j)
+          end
+          ops = array.append(ops, opInsert(jPath, newNode.children[j]))
+          j = j + 1
+        end
+        var k = minLen
+        while k < oldLen
+          var kPath = "{{path}}.{{k}}"
+          if path == ''
+            kPath = toString(k)
+          end
+          ops = array.append(ops, opRemove(kPath))
+          k = k + 1
+        end
+        ops
+      end
+    end
+  end
+end
+
+# True if either child list contains any node with a non-empty key.
+# Keyed children use identity-based diffing rather than positional diffing.
+def hasKeyedChildren
+    @param oldChildren ViewNode[]
+    @param newChildren ViewNode[]
+    @return Bool
+do
+  var found = false
+  for child in oldChildren
+    if child.key != ''
+      found = true
+    end
+  end
+  for child in newChildren
+    if child.key != ''
+      found = true
+    end
+  end
+  found
+end
+
+# True if the keyed child lists differ in count, key order, or any child's content.
+# When true, diffAt replaces the parent node entirely rather than diffing children in place.
+def keyedChildrenChanged
+    @param oldChildren ViewNode[]
+    @param newChildren ViewNode[]
+    @return Bool
+do
+  let oldLen = array.length(oldChildren)
+  let newLen = array.length(newChildren)
+  if oldLen != newLen
+    true
+  else
+    var changed = false
+    var i = 0
+    while i < oldLen
+      if oldChildren[i].key != newChildren[i].key
+        changed = true
+      end
+      let childOps = diffAt(oldChildren[i], newChildren[i], '')
+      if array.length(childOps) > 0
+        changed = true
+      end
+      i = i + 1
+    end
+    changed
+  end
+end
+
+# Compare two prop dictionaries. Returns a dict containing '__changed' if any prop differs.
+def diffProps
+    @param oldProps Dictionary
+    @param newProps Dictionary
+    @return Dictionary
+do
+  let oldKeys = getKeys(oldProps)
+  let newKeys = getKeys(newProps)
+  let oldKeyCount = array.length(oldKeys)
+  let newKeyCount = array.length(newKeys)
+  if oldKeyCount != newKeyCount
+    set({}, '__changed', true)
+  else
+    var changed = false
+    for key in newKeys
+      let keyExists = hasKey(oldProps, key)
+      if !keyExists
+        changed = true
+      else
+        let oldStr = getString(oldProps, key)
+        let newStr = getString(newProps, key)
+        if oldStr != newStr
+          changed = true
+        end
+        let oldInt = getInt(oldProps, key)
+        let newInt = getInt(newProps, key)
+        if oldInt != newInt
+          changed = true
+        end
+      end
+    end
+    if changed
+      set({}, '__changed', true)
+    else
+      {}
+    end
+  end
+end
+
+test diffTrees
+it 'returns empty diff for identical trees'
+  let a = testNode('Label')
+  let b = testNode('Label')
+  let ops = diffTrees(a, b)
+  assert.equals(array.length(ops), 0)
+end
+it 'detects kind change as replace'
+  let a = testNode('Label')
+  let b = testNode('Button')
+  let ops = diffTrees(a, b)
+  assert.equals(array.length(ops), 1)
+  assert.equals(ops[0].action, 'replace')
+  assert.equals(ops[0].path, '')
+end
+it 'detects prop addition as update'
+  let a = testNode('Label')
+  let b = testNodeWithProp('Label', 'text', 'hello')
+  let ops = diffTrees(a, b)
+  assert.equals(array.length(ops), 1)
+  assert.equals(ops[0].action, 'update')
+end
+it 'detects prop value change as update'
+  let a = testNodeWithProp('Label', 'text', 'hello')
+  let b = testNodeWithProp('Label', 'text', 'world')
+  let ops = diffTrees(a, b)
+  assert.equals(array.length(ops), 1)
+  assert.equals(ops[0].action, 'update')
+end
+it 'returns empty diff when props are identical'
+  let a = testNodeWithProp('Label', 'text', 'hello')
+  let b = testNodeWithProp('Label', 'text', 'hello')
+  let ops = diffTrees(a, b)
+  assert.equals(array.length(ops), 0)
+end
+it 'detects child addition as insert'
+  let a = testNodeWithChildren('VStack', [])
+  let b = testNodeWithChildren('VStack', [
+    testNode('Label')
+  ])
+  let ops = diffTrees(a, b)
+  assert.equals(array.length(ops), 1)
+  assert.equals(ops[0].action, 'insert')
+  assert.equals(ops[0].path, '0')
+end
+it 'detects child removal as remove'
+  let a = testNodeWithChildren('VStack', [
+    testNode('Label')
+  ])
+  let b = testNodeWithChildren('VStack', [])
+  let ops = diffTrees(a, b)
+  assert.equals(array.length(ops), 1)
+  assert.equals(ops[0].action, 'remove')
+  assert.equals(ops[0].path, '0')
+end
+it 'detects nested child kind change'
+  let a = testNodeWithChildren('VStack', [
+    testNode('Label')
+  ])
+  let b = testNodeWithChildren('VStack', [
+    testNode('Button')
+  ])
+  let ops = diffTrees(a, b)
+  assert.equals(array.length(ops), 1)
+  assert.equals(ops[0].action, 'replace')
+  assert.equals(ops[0].path, '0')
+end
+it 'handles multiple children changes'
+  let a = testNodeWithChildren('VStack', [
+    testNode('Label')
+    testNode('Button')
+  ])
+  let b = testNodeWithChildren('VStack', [
+    testNode('Label')
+    testNode('Button')
+    testNode('Spacer')
+  ])
+  let ops = diffTrees(a, b)
+  assert.equals(array.length(ops), 1)
+  assert.equals(ops[0].action, 'insert')
+  assert.equals(ops[0].path, '2')
+end
+it 'handles deep nesting paths'
+  let inner1 = testNodeWithChildren('HStack', [
+    testNode('Label')
+  ])
+  let inner2 = testNodeWithChildren('HStack', [
+    testNode('Button')
+  ])
+  let a = testNodeWithChildren('VStack', [
+    inner1
+  ])
+  let b = testNodeWithChildren('VStack', [
+    inner2
+  ])
+  let ops = diffTrees(a, b)
+  assert.equals(array.length(ops), 1)
+  assert.equals(ops[0].action, 'replace')
+  assert.equals(ops[0].path, '0.0')
+end
+it 'treats key changes as replace'
+  let a = ViewNode(kind: 'Label', key: 'a', props: {}, children: [], events: emptyEvents())
+  let b = ViewNode(kind: 'Label', key: 'b', props: {}, children: [], events: emptyEvents())
+  let ops = diffTrees(a, b)
+  assert.equals(array.length(ops), 1)
+  assert.equals(ops[0].action, 'replace')
+end
+it 'replaces keyed parent when keyed child order changes'
+  let a = testNodeWithChildren('VStack', [
+    ViewNode(kind: 'Label', key: 'a', props: {}, children: [], events: emptyEvents())
+    ViewNode(kind: 'Label', key: 'b', props: {}, children: [], events: emptyEvents())
+  ])
+  let b = testNodeWithChildren('VStack', [
+    ViewNode(kind: 'Label', key: 'b', props: {}, children: [], events: emptyEvents())
+    ViewNode(kind: 'Label', key: 'a', props: {}, children: [], events: emptyEvents())
+  ])
+  let ops = diffTrees(a, b)
+  assert.equals(array.length(ops), 1)
+  assert.equals(ops[0].action, 'replace')
+  assert.equals(ops[0].path, '')
+end
+end
+
+test opReplace
+it 'builds a replace op carrying the new node'
+  let n = testNode('Label')
+  let op = opReplace('0.1', n)
+  assert.equals(op.action, 'replace')
+  assert.equals(op.path, '0.1')
+  assert.equals(op.node!.kind, 'Label')
+end
+end
+
+test opUpdate
+it 'builds an update op carrying the new props'
+  let op = opUpdate('0', set({}, 'text', 'hi'))
+  assert.equals(op.action, 'update')
+  assert.equals(op.path, '0')
+  assert.equals(getString(op.props!, 'text')!, 'hi')
+end
+end
+
+test opInsert
+it 'builds an insert op carrying the inserted node'
+  let op = opInsert('2', testNode('Button'))
+  assert.equals(op.action, 'insert')
+  assert.equals(op.path, '2')
+  assert.equals(op.node!.kind, 'Button')
+end
+end
+
+test opRemove
+it 'builds a remove op with no node or props payload'
+  let op = opRemove('1.0')
+  assert.equals(op.action, 'remove')
+  assert.equals(op.path, '1.0')
+  assert.equals(op.node?, false)
+  assert.equals(op.props?, false)
+end
+end
+
+test diffAt
+it 'reports no ops for identical subtrees'
+  let a = testNode('Label')
+  let b = testNode('Label')
+  assert.equals(array.length(diffAt(a, b, '0')), 0)
+end
+it 'reports a replace when kinds diverge at a nested path'
+  let a = testNode('Label')
+  let b = testNode('Button')
+  let ops = diffAt(a, b, '3.1')
+  assert.equals(array.length(ops), 1)
+  assert.equals(ops[0].path, '3.1')
+  assert.equals(ops[0].action, 'replace')
+end
+end
+
+test diffProps
+it 'reports unchanged when both dicts are empty'
+  let d = diffProps({}, {})
+  assert.equals(hasKey(d, '__changed'), false)
+end
+it 'flags a difference when a key is added'
+  let d = diffProps({}, set({}, 'text', 'hi'))
+  assert.equals(hasKey(d, '__changed'), true)
+end
+it 'flags a difference when a string value changes'
+  let before = set({}, 'text', 'hi')
+  let after = set({}, 'text', 'bye')
+  assert.equals(hasKey(diffProps(before, after), '__changed'), true)
+end
+end
+
+test hasKeyedChildren
+it 'is false when no child has a key'
+  let a = testNode('Label')
+  let b = testNode('Label')
+  assert.equals(hasKeyedChildren([a], [b]), false)
+end
+it 'is true when at least one child has a non-empty key'
+  let keyed = ViewNode(kind: 'Label', key: 'a', props: {}, children: [], events: emptyEvents())
+  let plain = testNode('Label')
+  assert.equals(hasKeyedChildren([keyed], [plain]), true)
+end
+end
+
+test keyedChildrenChanged
+it 'is false when keyed children match position and content'
+  let k1 = ViewNode(kind: 'Label', key: 'a', props: {}, children: [], events: emptyEvents())
+  let k2 = ViewNode(kind: 'Label', key: 'a', props: {}, children: [], events: emptyEvents())
+  assert.equals(keyedChildrenChanged([k1], [k2]), false)
+end
+it 'is true when keyed children counts differ'
+  let a = ViewNode(kind: 'Label', key: 'a', props: {}, children: [], events: emptyEvents())
+  let b = ViewNode(kind: 'Label', key: 'b', props: {}, children: [], events: emptyEvents())
+  assert.equals(keyedChildrenChanged([a], [a b]), true)
+end
+it 'is true when the same keys appear in a different order'
+  let a = ViewNode(kind: 'Label', key: 'a', props: {}, children: [], events: emptyEvents())
+  let b = ViewNode(kind: 'Label', key: 'b', props: {}, children: [], events: emptyEvents())
+  assert.equals(keyedChildrenChanged([a b], [b a]), true)
+end
+end
+
+test testNode
+it 'builds a minimal ViewNode of the given kind'
+  let n = testNode('HStack')
+  assert.equals(n.kind, 'HStack')
+  assert.equals(n.key, '')
+  assert.equals(array.length(n.children), 0)
+end
+end
+
+test testNodeWithProp
+it 'builds a ViewNode carrying a single prop'
+  let n = testNodeWithProp('Label', 'text', 'hi')
+  assert.equals(n.kind, 'Label')
+  assert.equals(getString(n.props, 'text')!, 'hi')
+end
+end
+
+test testNodeWithChildren
+it 'builds a ViewNode with pre-built children'
+  let child = testNode('Label')
+  let n = testNodeWithChildren('VStack', [child])
+  assert.equals(n.kind, 'VStack')
+  assert.equals(array.length(n.children), 1)
+  assert.equals(n.children[0].kind, 'Label')
+end
+end

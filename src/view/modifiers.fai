@@ -1,0 +1,226 @@
+use std.array
+
+# ── Modifiers (UFCS-friendly) ───────────────────────────────────────
+# Add inner padding around a node's content. `amount` is in pixels and
+# is applied to all four sides.
+# 
+# ```fai
+# VStack do
+#     Label('content')
+# end.padding(16)
+# ```
+def padding
+    @param node ViewNode
+    @param amount Int
+    @return ViewNode
+do
+  let props = set(node.props, 'padding', amount)
+  let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+  replaceLastNode(result)
+  result
+end
+
+# Set the background colour (hex string, named colour, or rgba).
+# 
+# ```fai
+# Label('Card').padding(12).background('#ffffff').cornerRadius(8)
+# ```
+def background
+    @param node ViewNode
+    @param color String
+    @return ViewNode
+do
+  let props = set(node.props, 'background', color)
+  let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+  replaceLastNode(result)
+  result
+end
+
+# Set the foreground (text) colour.
+# 
+# ```fai
+# Label('Error').foreground('#b3261e')
+# ```
+def foreground
+    @param node ViewNode
+    @param color String
+    @return ViewNode
+do
+  let props = set(node.props, 'foreground', color)
+  let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+  replaceLastNode(result)
+  result
+end
+
+# Round corners. `radius` is in pixels.
+# 
+# ```fai
+# ImageView(src: '/avatar.png').cornerRadius(24)
+# ```
+def cornerRadius
+    @param node ViewNode
+    @param radius Int
+    @return ViewNode
+do
+  let props = set(node.props, 'cornerRadius', radius)
+  let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+  replaceLastNode(result)
+  result
+end
+
+# Set the font size in points on a ViewNode. Chainable via UFCS.
+# 
+# ```fai
+# Label('Title').fontSize(24)
+# ```
+def fontSize
+    @param node ViewNode
+    @param size Int
+    @return ViewNode
+do
+  let props = set(node.props, 'fontSize', size)
+  let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+  replaceLastNode(result)
+  result
+end
+
+# Set the font weight. Use numeric strings like '400', '600', '700' or
+# named weights ('bold') depending on the platform adapter.
+# 
+# ```fai
+# Label('Important').fontWeight('700')
+# ```
+def fontWeight
+    @param node ViewNode
+    @param weight String
+    @return ViewNode
+do
+  let props = set(node.props, 'fontWeight', weight)
+  let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+  replaceLastNode(result)
+  result
+end
+
+# Set the CSS `flex` shorthand. Useful for fixing width/height on a
+# child inside an HStack/VStack.
+# 
+# ```fai
+# Label('Fixed-width column').flex('0 0 150px')
+# ```
+def flex
+    @param node ViewNode
+    @param value String
+    @return ViewNode
+do
+  let props = set(node.props, 'flex', value)
+  let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+  replaceLastNode(result)
+  result
+end
+
+# Set the CSS `width`. Accepts any valid CSS length — `'100%'`,
+# `'480px'`, `'50vw'`, etc. Usually paired with `maxWidth` for a
+# fluid-but-capped page container.
+# 
+# ```fai
+# VStack do
+#     ...
+# end.width('100%').maxWidth('1100px')
+# ```
+def width
+    @param node ViewNode
+    @param value String
+    @return ViewNode
+do
+  let props = set(node.props, 'width', value)
+  let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+  replaceLastNode(result)
+  result
+end
+
+# Set the CSS `max-width`. Accepts any valid CSS length. Typical use
+# is a responsive page shell: `width('100%').maxWidth('1100px')` fills
+# the viewport on phones but caps on wide desktops.
+# 
+# ```fai
+# Section('Teams') do
+#     ...
+# end.width('100%').maxWidth('960px')
+# ```
+def maxWidth
+    @param node ViewNode
+    @param value String
+    @return ViewNode
+do
+  let props = set(node.props, 'maxWidth', value)
+  let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+  replaceLastNode(result)
+  result
+end
+
+# Set opacity in the range 0.0 (fully transparent) to 1.0 (fully opaque).
+# 
+# ```fai
+# Label('Dimmed').opacity(0.5)
+# ```
+def opacity
+    @param node ViewNode
+    @param value Float
+    @return ViewNode
+do
+  let props = set(node.props, 'opacity', value)
+  let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+  replaceLastNode(result)
+  result
+end
+
+# Set a stable key for list reconciliation. Apply this to each node
+# produced inside a `for` loop so the diff can track identity across
+# renders — otherwise items may flicker or lose focus when the list
+# reorders.
+# 
+# ```fai
+# for task in tasks
+#     TaskCard(task).withKey(convert.toString(task.id))
+# end
+# ```
+def withKey
+    @param node ViewNode
+    @param value String
+    @return ViewNode
+do
+  let result = ViewNode(kind: node.kind, key: value, props: node.props, children: node.children, events: node.events)
+  replaceLastNode(result)
+  result
+end
+
+test padding
+it 'adds padding to a node'
+  let l = Label('hello').padding(10)
+  assert.equals(l.kind, 'Label')
+  assert.equals(getIntProp(l, 'padding'), 10)
+end
+it 'chains multiple modifiers'
+  let l = Label('hello').padding(10).background('blue').foreground('white')
+  assert.equals(getIntProp(l, 'padding'), 10)
+  assert.equals(getProp(l, 'background'), 'blue')
+  assert.equals(getProp(l, 'foreground'), 'white')
+end
+it 'builds a complete UI tree'
+  let tree = VStack do
+      Label('Title').fontSize(24)
+      HStack do
+          Button('Save').onClick do
+              print('save')
+          end
+          Button('Cancel')
+      end
+      Spacer()
+  end
+  assert.equals(tree.kind, 'VStack')
+  assert.equals(childCount(tree), 3)
+  assert.equals(getChild(tree, 1).kind, 'HStack')
+  assert.equals(childCount(getChild(tree, 1)), 2)
+  assert.equals(getChild(tree, 2).kind, 'Spacer')
+end
+end

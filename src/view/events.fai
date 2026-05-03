@@ -1,0 +1,176 @@
+use std.array
+
+use std.events
+
+var eventHandlers ClickAction[] = []
+
+var changeHandlers ChangeAction[] = []
+
+var submitHandlers ClickAction[] = []
+
+# ── Event handler registry ──────────────────────────────────────────
+# Closures can't cross the JS/WASM boundary directly. Instead, we
+# store them in a global registry and pass integer IDs to JS. The
+# host runtime emits `view:click` / `view:input` / `view:submit`
+# events carrying the integer id; `installViewEventBridge` below
+# wires those events back to the registered closures.
+def attachClickHandler
+    @param node ViewNode
+    @param handler ClickAction
+    @return ViewNode
+do
+  let handlerId = registerHandler(handler)
+  let props = set(node.props, 'handlerId', handlerId)
+  let events = Events(onClick: handler, onChange: node.events.onChange)
+  let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: events)
+  replaceLastNode(result)
+  result
+end
+
+# AttachChangeHandler.
+def attachChangeHandler
+    @param node ViewNode
+    @param handler ChangeAction
+    @return ViewNode
+do
+  let changeId = registerChangeHandler(handler)
+  let props = set(node.props, 'changeHandlerId', changeId)
+  let events = Events(onClick: node.events.onClick, onChange: handler)
+  let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: events)
+  replaceLastNode(result)
+  result
+end
+
+# Register a click handler and return its ID.
+def registerHandler
+    @param handler ClickAction
+    @return Int
+do
+  let id = length(eventHandlers)
+  eventHandlers = array.append(eventHandlers, handler)
+  id
+end
+
+# Register a change handler and return its ID.
+def registerChangeHandler
+    @param handler ChangeAction
+    @return Int
+do
+  let id = length(changeHandlers)
+  changeHandlers = array.append(changeHandlers, handler)
+  id
+end
+
+# Register a submit handler (Enter-key on a TextInput). Returns its ID.
+def registerSubmitHandler
+    @param handler ClickAction
+    @return Int
+do
+  let id = length(submitHandlers)
+  submitHandlers = array.append(submitHandlers, handler)
+  id
+end
+
+# Clear all registered handlers (call before each render).
+def clearHandlers
+    @return Void
+do
+  eventHandlers = []
+  changeHandlers = []
+  submitHandlers = []
+end
+
+var bridgeInstalled = false
+
+# Install the host-runtime → forai event bridge. The browser runtime
+# emits `view:click`, `view:input`, and `view:submit` events when a
+# DOM event fires; each carries `{ id }` (and `value` for input).
+# Each subscriber looks the id up in the matching handler array and
+# runs the registered closure. Idempotent — first call wires up,
+# subsequent calls return immediately, so calling from `mount` on
+# every boot is safe.
+def installViewEventBridge
+    @return Void
+do
+  if !bridgeInstalled
+    bridgeInstalled = true
+    let _click = events.on('view:click') do with e Event
+        let id = getInt(e.data, 'id')!
+        if id >= 0
+          if id < length(eventHandlers)
+            eventHandlers[id]()
+          end
+        end
+    end
+    let _input = events.on('view:input') do with e Event
+        let id = getInt(e.data, 'id')!
+        let value = getString(e.data, 'value')!
+        if id >= 0
+          if id < length(changeHandlers)
+            changeHandlers[id](value)
+          end
+        end
+    end
+    let _submit = events.on('view:submit') do with e Event
+        let id = getInt(e.data, 'id')!
+        if id >= 0
+          if id < length(submitHandlers)
+            submitHandlers[id]()
+          end
+        end
+    end
+  end
+end
+
+# ── Event handlers ──────────────────────────────────────────────────
+# Attach a click handler as a UFCS modifier. Most leaf components (Button,
+# Toggle) take `onClick:` directly — use this when you want to make a
+# container or Label clickable.
+# 
+# ```fai
+# Label('Click me').padding(8).onClick do
+#     navigate('/details')
+# end
+# ```
+def onClick
+    @param node ViewNode
+    @param handler ClickAction
+    @return ViewNode
+do
+  attachClickHandler(node, handler)
+end
+
+# Attach a change handler as a UFCS modifier. The handler receives the
+# new value as a String.
+# 
+# ```fai
+# TextInput('Search').onChange do with query String
+#     runSearch(query)
+# end
+# ```
+def onChange
+    @param node ViewNode
+    @param handler ChangeAction
+    @return ViewNode
+do
+  attachChangeHandler(node, handler)
+end
+
+test onClick
+it 'attaches a click handler closure'
+  let b = Button('Save').onClick do
+      print('clicked')
+  end
+  assert.equals(b.events.onClick?, true)
+end
+it 'button with handler via onClick param sets onClick'
+  let b = Button('Inline', onClick: do
+      print('x')
+  end)
+  assert.equals(b.events.onClick?, true)
+end
+it 'button with no handler leaves onClick null'
+  let b = Button('Plain')
+  assert.equals(b.events.onClick?, false)
+end
+end

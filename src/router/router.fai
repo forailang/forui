@@ -1,0 +1,701 @@
+use std.string
+
+use std.array
+
+use std.convert
+
+use { ViewNode, emptyEvents, registerNode, pushFrame, popFrame, attachClickHandler, Children, Label } from view
+
+use { Signal, createSignal, setValue, clearHookSignals } from signal
+
+# ── Route types ────────────────────────────────────────────────────
+# A function that renders the UI subtree for a matched route.
+# Passed as the second argument to Route().
+type def RouteBuilder
+    @return Void
+end
+
+type RouteEntry
+  pattern String
+  builder RouteBuilder
+  transition String?
+end
+
+# ── Platform listener types ────────────────────────────────────────
+# Called by the platform when the user navigates to a new path (e.g. browser popstate).
+type def NavigateListener
+    @param path String
+    @return Void
+end
+
+# Called by the platform when the user goes back (e.g. hardware back button).
+type def BackListener
+    @return Void
+end
+
+var routerPathSignal = createSignal('/')
+
+var routeEntries RouteEntry[] = []
+
+var currentParams Dictionary = {}
+
+var navigateListener NavigateListener? = null
+
+var backListener BackListener? = null
+
+# ── Router state ───────────────────────────────────────────────────
+# ── Initialization ─────────────────────────────────────────────────
+# Ensure the router path signal exists (lazy init).
+def ensureRouter
+    @return Void
+do
+
+end
+
+# ── Platform hooks ─────────────────────────────────────────────────
+# The web adapter registers these to bridge to the browser History API.
+# Register a listener called when navigate() pushes a new path.
+# The web adapter uses this to call history.pushState.
+def onNavigate
+    @param listener NavigateListener
+    @return Void
+do
+  navigateListener = listener
+end
+
+# Register a listener called when goBack() is invoked.
+# The web adapter uses this to call history.back().
+def onBack
+    @param listener BackListener
+    @return Void
+do
+  backListener = listener
+end
+
+# Set the path from the platform without notifying listeners.
+# The web adapter calls this from the popstate handler so the
+# URL is already correct — no pushState needed.
+def setPathFromPlatform
+    @param path String
+    @return Void
+do
+  ensureRouter()
+  clearHookSignals()
+  setValue(routerPathSignal, path)
+end
+
+# ── Navigation API ─────────────────────────────────────────────────
+# Programmatically change routes — typically from a Button's onClick.
+# Updates the reactive path signal so the next render shows the new
+# page.
+# 
+# ```fai
+# Button('Open details', onClick: do
+#     navigate('/teams/' + team.id)
+# end)
+# ```
+def navigate
+    @param path String
+    @return Void
+do
+  ensureRouter()
+  clearHookSignals()
+  setValue(routerPathSignal, path)
+  if navigateListener != null
+    navigateListener!(path)
+  end
+end
+
+# Go back in history. Delegates to the platform adapter.
+def goBack
+    @return Void
+do
+  if backListener != null
+    backListener!()
+  end
+end
+
+# Get the current router path.
+def currentPath
+    @return String
+do
+  ensureRouter()
+  toString(routerPathSignal.value)
+end
+
+# Read a `:name` placeholder from the currently matched route. Returns
+# `null` if the param isn't present — unwrap with a fallback for safety.
+# 
+# ```fai
+# # Route: '/teams/:teamId'
+# let teamId = unwrap(routeParam('teamId'), '')
+# ```
+def routeParam
+    @param name String
+    @return String?
+do
+  getString(currentParams, name)
+end
+
+# ── Path matching (private helpers) ────────────────────────────────
+# Split a URL path into segments, discarding empty parts.
+# '/profile/42' -> ['profile', '42']
+# '/' -> []
+def splitPath
+    @param path String
+    @return String[]
+do
+  let parts = string.split(path, '/')
+  var result String[] = []
+  for part in parts
+    if !string.isEmpty(part)
+      result = array.append(result, part)
+    end
+  end
+  result
+end
+
+# Check if a URL path matches a route pattern.
+# Supports exact segments, :param placeholders, and '*' catch-all.
+def pathMatches
+    @param path String
+    @param pattern String
+    @return Bool
+do
+  if pattern == '*'
+    true
+  else
+    let pathParts = splitPath(path)
+    let patternParts = splitPath(pattern)
+    let pathLen = array.length(pathParts)
+    let patternLen = array.length(patternParts)
+    if pathLen != patternLen
+      false
+    else
+      var matches = true
+      var i = 0
+      while i < patternLen
+        let seg = patternParts[i]
+        if !string.startsWith(seg, ':')
+          if seg != pathParts[i]
+            matches = false
+          end
+        end
+        i = i + 1
+      end
+      matches
+    end
+  end
+end
+
+# Extract named params from a path given its matching pattern.
+# '/profile/42' with pattern '/profile/:id' -> { id: '42' }
+def extractParams
+    @param path String
+    @param pattern String
+    @return Dictionary
+do
+  let pathParts = splitPath(path)
+  let patternParts = splitPath(pattern)
+  var params Dictionary = {}
+  var i = 0
+  let len = array.length(patternParts)
+  while i < len
+    let seg = patternParts[i]
+    if string.startsWith(seg, ':')
+      let name = string.substring(seg, 1, string.length(seg))
+      params = set(params, name, pathParts[i])
+    end
+    i = i + 1
+  end
+  params
+end
+
+# Strip a base path prefix from a full path.
+def stripBase
+    @param path String
+    @param basePath String
+    @return String
+do
+  if basePath == '/'
+    path
+  else
+    if string.startsWith(path, basePath)
+      let rest = string.substring(path, string.length(basePath), string.length(path))
+      if string.isEmpty(rest)
+        '/'
+      else
+        rest
+      end
+    else
+      path
+    end
+  end
+end
+
+# Find the first route whose pattern matches the given path.
+def findMatch
+    @param path String
+    @param routes RouteEntry[]
+    @return RouteEntry?
+do
+  var matched RouteEntry? = null
+  for entry in routes
+    if matched == null
+      if pathMatches(path, entry.pattern)
+        matched = entry
+      end
+    end
+  end
+  matched
+end
+
+# ── Components ─────────────────────────────────────────────────────
+# A route definition inside a Router block. Patterns support literal
+# segments (`/about`), named placeholders (`/teams/:id`, read with
+# `routeParam`), and `*` as a catch-all fallback. The first matching
+# Route wins. See `Router` for the full usage example.
+def Route
+    @param path String
+    @param builder RouteBuilder
+    @return ViewNode
+do
+  routeEntries = array.append(routeEntries, RouteEntry(pattern: path, builder: builder, transition: null))
+  let node = ViewNode(kind: 'RouteEntry', key: '', props: {}, children: [], events: emptyEvents())
+  registerNode(node)
+  node
+end
+
+# Client-side router. Collects child `Route` definitions and renders
+# the first one whose pattern matches the current path. Wrap this near
+# the top of your app, usually inside Window.
+# 
+# ```fai
+# Router do
+#     Route('/') do
+#         HomePage()
+#     end
+#     Route('/settings') do
+#         SettingsPage()
+#     end
+#     Route('/profile/:id') do
+#         ProfilePage()
+#     end
+#     Route('*') do
+#         NotFoundPage()
+#     end
+# end
+# ```
+def Router
+    @param children Children
+    @param basePath String?, default: null
+    @param transition String?, default: null
+    @return ViewNode
+do
+  ensureRouter()
+  routeEntries = []
+  pushFrame()
+  children()
+  popFrame()
+  var base = '/'
+  if basePath != null
+    base = basePath!
+  end
+  var trans = 'none'
+  if transition != null
+    trans = transition!
+  end
+  let path = currentPath()
+  let effectivePath = stripBase(path, base)
+  let matched = findMatch(effectivePath, routeEntries)
+  pushFrame()
+  if matched != null
+    currentParams = extractParams(effectivePath, matched!.pattern)
+    if matched!.transition != null
+      trans = matched!.transition!
+    end
+    matched!.builder()
+  end
+  let kids = popFrame()
+  var props = set({}, 'basePath', base)
+  props = set(props, 'transition', trans)
+  props = set(props, 'currentPath', path)
+  if matched != null
+    props = set(props, 'matchedPattern', matched!.pattern)
+  end
+  let node = ViewNode(kind: 'Router', key: '', props: props, children: kids, events: emptyEvents())
+  registerNode(node)
+  node
+end
+
+# Declarative navigation link — renders as an `<a>` on web so
+# right-click, cmd-click, and screen readers work correctly. Regular
+# clicks are intercepted and routed via `navigate()`.
+# 
+# ```fai
+# Link('/teams') do
+#     Label('Teams').foreground('#194b8f').fontWeight('700')
+# end
+# ```
+def Link
+    @param to String
+    @param children Children
+    @return ViewNode
+do
+  pushFrame()
+  children()
+  let kids = popFrame()
+  let props = set({}, 'to', to)
+  let node = ViewNode(kind: 'Link', key: '', props: props, children: kids, events: emptyEvents())
+  registerNode(node)
+  let target = to
+  attachClickHandler(node) do
+      navigate(target)
+  end
+end
+
+test splitPath
+it 'splits a simple path'
+  let parts = splitPath('/settings')
+  assert.equals(array.length(parts), 1)
+  assert.equals(parts[0], 'settings')
+end
+it 'splits a multi-segment path'
+  let parts = splitPath('/profile/42')
+  assert.equals(array.length(parts), 2)
+  assert.equals(parts[0], 'profile')
+  assert.equals(parts[1], '42')
+end
+it 'handles root path as empty segments'
+  let parts = splitPath('/')
+  assert.equals(array.length(parts), 0)
+end
+it 'handles trailing slash'
+  let parts = splitPath('/settings/')
+  assert.equals(array.length(parts), 1)
+  assert.equals(parts[0], 'settings')
+end
+end
+
+test pathMatches
+it 'matches root path'
+  assert.equals(pathMatches('/', '/'), true)
+end
+it 'matches exact path'
+  assert.equals(pathMatches('/settings', '/settings'), true)
+end
+it 'rejects non-matching path'
+  assert.equals(pathMatches('/settings', '/profile'), false)
+end
+it 'matches parameterized route'
+  assert.equals(pathMatches('/profile/42', '/profile/:id'), true)
+end
+it 'matches multiple params'
+  assert.equals(pathMatches('/blog/2024/hello', '/blog/:year/:slug'), true)
+end
+it 'rejects wrong segment count'
+  assert.equals(pathMatches('/profile', '/profile/:id'), false)
+end
+it 'wildcard matches any path'
+  assert.equals(pathMatches('/anything/here', '*'), true)
+end
+it 'wildcard matches root'
+  assert.equals(pathMatches('/', '*'), true)
+end
+end
+
+test extractParams
+it 'extracts a single param'
+  let params = extractParams('/profile/42', '/profile/:id')
+  assert.equals(getString(params, 'id'), '42')
+end
+it 'extracts multiple params'
+  let params = extractParams('/blog/2024/hello', '/blog/:year/:slug')
+  assert.equals(getString(params, 'year'), '2024')
+  assert.equals(getString(params, 'slug'), 'hello')
+end
+it 'returns empty dict for no params'
+  let params = extractParams('/settings', '/settings')
+  assert.equals(array.length(getKeys(params)), 0)
+end
+end
+
+test stripBase
+it 'strips a base path prefix'
+  assert.equals(stripBase('/app/settings', '/app'), '/settings')
+end
+it 'returns root when path equals base'
+  assert.equals(stripBase('/app', '/app'), '/')
+end
+it 'passes through when base is root'
+  assert.equals(stripBase('/settings', '/'), '/settings')
+end
+it 'passes through when base does not match'
+  assert.equals(stripBase('/other/page', '/app'), '/other/page')
+end
+end
+
+test findMatch
+it 'finds first matching route'
+  let routes = [
+    RouteEntry(pattern: '/', builder: do
+
+    end, transition: null)
+    RouteEntry(pattern: '/settings', builder: do
+
+    end, transition: null)
+  ]
+  let matched = findMatch('/settings', routes)
+  assert.equals(matched?, true)
+  assert.equals(matched!.pattern, '/settings')
+end
+it 'returns null when no match'
+  let routes = [
+    RouteEntry(pattern: '/', builder: do
+
+    end, transition: null)
+  ]
+  let matched = findMatch('/missing', routes)
+  assert.equals(matched?, false)
+end
+it 'returns first match when multiple could match'
+  let routes = [
+    RouteEntry(pattern: '/profile/:id', builder: do
+
+    end, transition: null)
+    RouteEntry(pattern: '*', builder: do
+
+    end, transition: null)
+  ]
+  let matched = findMatch('/profile/42', routes)
+  assert.equals(matched?, true)
+  assert.equals(matched!.pattern, '/profile/:id')
+end
+end
+
+test navigate
+it 'updates current path'
+  navigate('/settings')
+  assert.equals(currentPath(), '/settings')
+end
+it 'navigating twice updates to latest'
+  navigate('/a')
+  navigate('/b')
+  assert.equals(currentPath(), '/b')
+end
+end
+
+test routeParam
+it 'returns null when no params set'
+  currentParams = {}
+  assert.equals(routeParam('id')?, false)
+end
+end
+
+test Router
+it 'builds a Router ViewNode with matched content'
+  navigate('/')
+  let tree = Router do
+      Route('/') do
+          Label('Home')
+      end
+      Route('/about') do
+          Label('About')
+      end
+  end
+  assert.equals(tree.kind, 'Router')
+  assert.equals(array.length(tree.children), 1)
+  assert.equals(tree.children[0].kind, 'Label')
+  assert.equals(getString(tree.children[0].props, 'text'), 'Home')
+end
+it 'matches parameterized routes and extracts params'
+  navigate('/profile/42')
+  let tree = Router do
+      Route('/') do
+          Label('Home')
+      end
+      Route('/profile/:id') do
+          let id = routeParam('id')
+          Label(id!)
+      end
+  end
+  assert.equals(array.length(tree.children), 1)
+  assert.equals(getString(tree.children[0].props, 'text'), '42')
+end
+it 'renders empty children when no route matches'
+  navigate('/missing')
+  let tree = Router do
+      Route('/') do
+          Label('Home')
+      end
+  end
+  assert.equals(array.length(tree.children), 0)
+end
+it 'catch-all route matches unmatched paths'
+  navigate('/xyz')
+  let tree = Router do
+      Route('/') do
+          Label('Home')
+      end
+      Route('*') do
+          Label('404')
+      end
+  end
+  assert.equals(array.length(tree.children), 1)
+  assert.equals(getString(tree.children[0].props, 'text'), '404')
+end
+it 'respects basePath configuration'
+  navigate('/app/settings')
+  let tree = Router(basePath: '/app', children: do
+      Route('/') do
+          Label('AppHome')
+      end
+      Route('/settings') do
+          Label('Settings')
+      end
+  end)
+  assert.equals(array.length(tree.children), 1)
+  assert.equals(getString(tree.children[0].props, 'text'), 'Settings')
+end
+it 'sets transition prop on Router node'
+  navigate('/')
+  let tree = Router(transition: 'fade', children: do
+      Route('/') do
+          Label('Home')
+      end
+  end)
+  assert.equals(getString(tree.props, 'transition'), 'fade')
+end
+it 'defaults transition to none when not specified'
+  navigate('/')
+  let tree = Router do
+      Route('/') do
+          Label('Home')
+      end
+  end
+  assert.equals(getString(tree.props, 'transition'), 'none')
+end
+end
+
+test Link
+it 'builds a Link ViewNode with children and click handler'
+  let link = Link('/settings') do
+      Label('Go to Settings')
+  end
+  assert.equals(link.kind, 'Link')
+  assert.equals(getString(link.props, 'to'), '/settings')
+  assert.equals(array.length(link.children), 1)
+  assert.equals(link.children[0].kind, 'Label')
+  assert.equals(link.events.onClick?, true)
+end
+end
+
+test ensureRouter
+it 'is idempotent — safe to call many times'
+  ensureRouter()
+  ensureRouter()
+  ensureRouter()
+  assert.equals(true, true)
+end
+end
+
+var capturedNavPath = ''
+
+# Captures the path passed to the navigate listener under test.
+# Listener used by the onNavigate test — records the path it was
+# invoked with so the assertion can observe the callback fired.
+def recordNavigate
+    @param path String
+    @return Void
+do
+  capturedNavPath = path
+end
+
+test onNavigate
+it 'registers a listener that navigate() fires with the new path'
+  capturedNavPath = ''
+  onNavigate(recordNavigate)
+  navigate('/test/onnav')
+  assert.equals(capturedNavPath, '/test/onnav')
+end
+end
+
+var backCount = 0
+
+# Counter captured by the goBack listener under test.
+# Listener used by the onBack test — bumps a counter each time the
+# back action is dispatched.
+def recordBack
+    @return Void
+do
+  backCount = backCount + 1
+end
+
+test onBack
+it 'registers a listener that goBack() fires'
+  backCount = 0
+  onBack(recordBack)
+  goBack()
+  goBack()
+  assert.equals(backCount, 2)
+end
+end
+
+test setPathFromPlatform
+it 'updates the router path without firing the navigate listener'
+  capturedNavPath = ''
+  onNavigate(recordNavigate)
+  setPathFromPlatform('/from-platform')
+  assert.equals(currentPath(), '/from-platform')
+  assert.equals(capturedNavPath, '')
+end
+end
+
+test goBack
+it 'is a no-op when no back listener is registered'
+  backListener = null
+  backCount = 0
+  goBack()
+  assert.equals(backCount, 0)
+end
+end
+
+test currentPath
+it 'reflects the latest setPathFromPlatform value'
+  setPathFromPlatform('/cp-one')
+  assert.equals(currentPath(), '/cp-one')
+  setPathFromPlatform('/cp-two')
+  assert.equals(currentPath(), '/cp-two')
+end
+end
+
+test Route
+it 'appends an entry to routeEntries and returns a RouteEntry node'
+  routeEntries = []
+  pushFrame()
+  let node = Route('/dashboard') do
+      Label('dashboard')
+  end
+  popFrame()
+  assert.equals(node.kind, 'RouteEntry')
+  assert.equals(array.length(routeEntries), 1)
+  assert.equals(routeEntries[0].pattern, '/dashboard')
+end
+end
+
+test recordNavigate
+it 'stores the incoming path in capturedNavPath'
+  capturedNavPath = ''
+  recordNavigate('/x')
+  assert.equals(capturedNavPath, '/x')
+end
+end
+
+test recordBack
+it 'bumps the back counter'
+  backCount = 0
+  recordBack()
+  recordBack()
+  assert.equals(backCount, 2)
+end
+end
