@@ -196,23 +196,29 @@ end
 
 test padding
 it 'adds padding to a node'
-  let l = Label('hello').padding(10)
+  let l = Label('hello')
+    .padding(10)
   assert.equals(l.kind, 'Label')
   assert.equals(getIntProp(l, 'padding'), 10)
 end
 it 'chains multiple modifiers'
-  let l = Label('hello').padding(10).background('blue').foreground('white')
+  let l = Label('hello')
+    .padding(10)
+    .background('blue')
+    .foreground('white')
   assert.equals(getIntProp(l, 'padding'), 10)
   assert.equals(getProp(l, 'background'), 'blue')
   assert.equals(getProp(l, 'foreground'), 'white')
 end
 it 'builds a complete UI tree'
   let tree = VStack do
-      Label('Title').fontSize(24)
+      Label('Title')
+        .fontSize(24)
       HStack do
-          Button('Save').onClick do
-              print('save')
-          end
+          Button('Save')
+            .onClick do
+                print('save')
+            end
           Button('Cancel')
       end
       Spacer()

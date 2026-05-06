@@ -158,9 +158,10 @@ end
 
 test onClick
 it 'attaches a click handler closure'
-  let b = Button('Save').onClick do
-      print('clicked')
-  end
+  let b = Button('Save')
+    .onClick do
+        print('clicked')
+    end
   assert.equals(b.events.onClick?, true)
 end
 it 'button with handler via onClick param sets onClick'

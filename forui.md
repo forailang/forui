@@ -62,8 +62,10 @@ main = "src/server/main.fai"
 build_dir = "build/server"
 
 [dependencies]
-"file:///path/to/forui" = "0.1.0"
-"file:///path/to/html-forui" = "0.1.0"
+Forui     = "file:///path/to/forui"
+HtmlForui = "file:///path/to/html-forui"
+# Or fetch from public git repos:
+# Forui = "https://github.com/forailang/forui"
 
 # Client calls server functions over RPC
 [project.client.dependencies.server.remote.dev]
