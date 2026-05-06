@@ -230,3 +230,83 @@ it 'builds a complete UI tree'
   assert.equals(getChild(tree, 2).kind, 'Spacer')
 end
 end
+
+test background
+it 'sets the background prop'
+  let n = Label('x')
+    .background('#fff')
+  assert.equals(getProp(n, 'background'), '#fff')
+end
+end
+
+test foreground
+it 'sets the foreground prop'
+  let n = Label('x')
+    .foreground('#000')
+  assert.equals(getProp(n, 'foreground'), '#000')
+end
+end
+
+test cornerRadius
+it 'sets the cornerRadius prop'
+  let n = Label('x')
+    .cornerRadius(8)
+  assert.equals(getIntProp(n, 'cornerRadius'), 8)
+end
+end
+
+test fontSize
+it 'sets the fontSize prop'
+  let n = Label('x')
+    .fontSize(24)
+  assert.equals(getIntProp(n, 'fontSize'), 24)
+end
+end
+
+test fontWeight
+it 'sets the fontWeight prop'
+  let n = Label('x')
+    .fontWeight('700')
+  assert.equals(getProp(n, 'fontWeight'), '700')
+end
+end
+
+test flex
+it 'sets the flex prop'
+  let n = Label('x')
+    .flex('1')
+  assert.equals(getProp(n, 'flex'), '1')
+end
+end
+
+test width
+it 'sets the width prop'
+  let n = Label('x')
+    .width('120px')
+  assert.equals(getProp(n, 'width'), '120px')
+end
+end
+
+test maxWidth
+it 'sets the maxWidth prop'
+  let n = Label('x')
+    .maxWidth('640px')
+  assert.equals(getProp(n, 'maxWidth'), '640px')
+end
+end
+
+test opacity
+it 'sets the opacity prop'
+  let n = Label('x')
+    .opacity(0.5)
+  assert.equals(getProp(n, 'opacity'), 0.5)
+end
+end
+
+test withKey
+it 'sets a stable identity key on the node'
+  let n = Label('x')
+    .withKey('row-7')
+  assert.equals(n.key, 'row-7')
+end
+end

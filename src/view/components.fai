@@ -544,3 +544,98 @@ it 'clearHandlers drops submit handlers'
   assert.equals(true, true)
 end
 end
+
+test View
+it 'builds a View node containing its children'
+  let n = View do
+      Label('a')
+  end
+  assert.equals(n.kind, 'View')
+  assert.equals(childCount(n), 1)
+end
+end
+
+test HStack
+it 'builds an HStack node containing its children'
+  let n = HStack do
+      Label('a')
+      Label('b')
+  end
+  assert.equals(n.kind, 'HStack')
+  assert.equals(childCount(n), 2)
+end
+end
+
+test ZStack
+it 'builds a ZStack node containing its children'
+  let n = ZStack do
+      Label('back')
+      Label('front')
+  end
+  assert.equals(n.kind, 'ZStack')
+  assert.equals(childCount(n), 2)
+end
+end
+
+test ScrollView
+it 'builds a ScrollView node containing its children'
+  let n = ScrollView do
+      Label('row')
+  end
+  assert.equals(n.kind, 'ScrollView')
+  assert.equals(childCount(n), 1)
+end
+end
+
+test Button
+it 'builds a Button carrying its text'
+  let n = Button('Save')
+  assert.equals(n.kind, 'Button')
+  assert.equals(getProp(n, 'text'), 'Save')
+end
+end
+
+test Spacer
+it 'builds a Spacer leaf node'
+  let n = Spacer()
+  assert.equals(n.kind, 'Spacer')
+  assert.equals(childCount(n), 0)
+end
+end
+
+test ImageView
+it 'builds an Image node carrying its src'
+  let n = ImageView('/logo.png')
+  assert.equals(n.kind, 'Image')
+  assert.equals(getProp(n, 'src'), '/logo.png')
+end
+end
+
+test Toggle
+it 'builds a Toggle reflecting an isOn value'
+  let n = Toggle(isOn: true)
+  assert.equals(n.kind, 'Toggle')
+  assert.equals(getProp(n, 'on'), 'true')
+end
+end
+
+test Divider
+it 'builds a Divider leaf node'
+  let n = Divider()
+  assert.equals(n.kind, 'Divider')
+  assert.equals(childCount(n), 0)
+end
+end
+
+test SegmentedControl
+it 'builds a SegmentedControl carrying its segments'
+  let n = SegmentedControl(options: [
+    'Day'
+    'Week'
+  ], selected: 'Day')
+  assert.equals(n.kind, 'SegmentedControl')
+  assert.equals(getProp(n, 'value'), 'Day')
+  assert.equals(childCount(n), 2)
+  assert.equals(getChild(n, 0).kind, 'Segment')
+end
+end

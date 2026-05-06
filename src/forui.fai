@@ -2,7 +2,7 @@ use std.array
 
 use { ViewNode, clearHandlers, emptyEvents, getProp, installViewEventBridge } from view
 
-use { hasDirtySignals, clearDirty, onSignalChange, resetHooks, enterSsrMode, exitSsrMode, saveHookState, restoreHookState } from signal
+use { hasDirtySignals, clearDirty, onSignalChange, clearOnSignalChange, resetHooks, enterSsrMode, exitSsrMode, saveHookState, restoreHookState } from signal
 
 use { DiffOp, diffTrees } from diff
 
@@ -269,6 +269,9 @@ it 'replace op node matches the rendered tree'
   mount(staticApp, testAdapter)
   assert.equals(testOps[0].node!.kind, 'Label')
 end
+afterEach
+  clearOnSignalChange()
+end
 end
 
 test rerender
@@ -290,6 +293,9 @@ it 'calls adapter with update op when a prop changes'
   assert.equals(array.length(testOps), 1)
   assert.equals(testOps[0].action, 'update')
 end
+afterEach
+  clearOnSignalChange()
+end
 end
 
 test getLastDiffOps
@@ -309,6 +315,9 @@ it 'returns diff ops after a re-render with changes'
   let ops = getLastDiffOps()
   assert.equals(array.length(ops), 1)
   assert.equals(ops[0].action, 'update')
+end
+afterEach
+  clearOnSignalChange()
 end
 end
 
@@ -332,6 +341,9 @@ it 'isolates hook state — mounted app rerenders correctly after SSR'
   changingAppText = 'after'
   rerender()
   assert.equals(testOps[0].action, 'update')
+end
+afterEach
+  clearOnSignalChange()
 end
 end
 

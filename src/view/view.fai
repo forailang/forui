@@ -330,3 +330,124 @@ it 'returns null when prop value not found'
   assert.isNull(found)
 end
 end
+
+test emptyEvents
+it 'returns an Events with both handlers null'
+  let e = emptyEvents()
+  assert.equals(e.onClick?, false)
+  assert.equals(e.onChange?, false)
+end
+end
+
+test pushFrame
+it 'adds a frame marker without altering the tree stack'
+  pushFrame()
+  let depthBefore = length(frameStarts)
+  pushFrame()
+  let depthAfter = length(frameStarts)
+  assert.equals(depthAfter, depthBefore + 1)
+  popFrame()
+  popFrame()
+end
+end
+
+test popFrame
+it 'returns the children registered since the matching pushFrame'
+  pushFrame()
+  registerNode(testNode('A'))
+  registerNode(testNode('B'))
+  let kids = popFrame()
+  assert.equals(array.length(kids), 2)
+  assert.equals(kids[0].kind, 'A')
+  assert.equals(kids[1].kind, 'B')
+end
+end
+
+test registerNode
+it 'appends the node to the active frame'
+  pushFrame()
+  registerNode(testNode('X'))
+  let kids = popFrame()
+  assert.equals(array.length(kids), 1)
+  assert.equals(kids[0].kind, 'X')
+end
+end
+
+test replaceLastNode
+it 'swaps the most recently registered node in place'
+  pushFrame()
+  registerNode(testNode('Old'))
+  replaceLastNode(testNode('New'))
+  let kids = popFrame()
+  assert.equals(array.length(kids), 1)
+  assert.equals(kids[0].kind, 'New')
+end
+end
+
+test buildContainer
+it 'wraps a children block into a kind-tagged ViewNode'
+  pushFrame()
+  let outer = buildContainer('Box', {}) do
+      registerNode(testNode('Inner'))
+  end
+  popFrame()
+  assert.equals(outer.kind, 'Box')
+  assert.equals(childCount(outer), 1)
+  assert.equals(getChild(outer, 0).kind, 'Inner')
+end
+end
+
+test childCount
+it 'returns the number of direct children'
+  let n = testNodeWithChildren('Box', [
+    testNode('A')
+    testNode('B')
+    testNode('C')
+  ])
+  assert.equals(childCount(n), 3)
+end
+it 'is zero for a leaf'
+  assert.equals(childCount(testNode('Leaf')), 0)
+end
+end
+
+test getChild
+it 'returns the direct child at the given 0-based index'
+  let n = testNodeWithChildren('Box', [
+    testNode('First')
+    testNode('Second')
+  ])
+  assert.equals(getChild(n, 0).kind, 'First')
+  assert.equals(getChild(n, 1).kind, 'Second')
+end
+end
+
+test getProp
+it 'returns the value when the prop is set'
+  let n = testNodeWithProp('Label', 'text', 'hi')
+  assert.equals(getProp(n, 'text'), 'hi')
+end
+it 'returns null when the prop is absent'
+  assert.isNull(getProp(testNode('Label'), 'text'))
+end
+end
+
+test getIntProp
+it 'returns the value when the prop is set as an Int'
+  let props = set({}, 'padding', 12)
+  let n = ViewNode(kind: 'X', key: '', props: props, children: [], events: emptyEvents())
+  assert.equals(getIntProp(n, 'padding'), 12)
+end
+it 'returns null when the prop is absent'
+  assert.isNull(getIntProp(testNode('X'), 'padding'))
+end
+end
+
+test hasProp
+it 'is true for a set prop'
+  assert.isTrue(hasProp(testNodeWithProp('Label', 'text', 'hi'), 'text'))
+end
+it 'is false for a missing prop'
+  assert.isFalse(hasProp(testNode('Label'), 'text'))
+end
+end

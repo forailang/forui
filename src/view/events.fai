@@ -175,3 +175,115 @@ it 'button with no handler leaves onClick null'
   assert.equals(b.events.onClick?, false)
 end
 end
+
+test onChange
+it 'attaches a change handler closure'
+  clearHandlers()
+  let n = TextInput('Q')
+    .onChange do with v String
+        print('got: ' + v)
+    end
+  assert.equals(n.events.onChange?, true)
+  clearHandlers()
+end
+end
+
+test attachClickHandler
+it 'sets handlerId and registers the closure'
+  clearHandlers()
+  let b = Button('A')
+  let withHandler = attachClickHandler(b) do
+      print('hit')
+  end
+  assert.equals(getIntProp(withHandler, 'handlerId')!, 0)
+  assert.equals(withHandler.events.onClick?, true)
+  clearHandlers()
+end
+end
+
+test attachChangeHandler
+it 'sets changeHandlerId and registers the closure'
+  clearHandlers()
+  let n = TextInput('Q')
+  let withHandler = attachChangeHandler(n) do with v String
+      print('got: ' + v)
+  end
+  assert.equals(getIntProp(withHandler, 'changeHandlerId')!, 0)
+  assert.equals(withHandler.events.onChange?, true)
+  clearHandlers()
+end
+end
+
+test registerHandler
+it 'returns sequential ids and grows the registry'
+  clearHandlers()
+  let id0 = registerHandler do
+      print('h0')
+  end
+  let id1 = registerHandler do
+      print('h1')
+  end
+  assert.equals(id0, 0)
+  assert.equals(id1, 1)
+  clearHandlers()
+end
+end
+
+test registerChangeHandler
+it 'returns sequential ids and grows the registry'
+  clearHandlers()
+  let id0 = registerChangeHandler do with v String
+      print(v)
+  end
+  let id1 = registerChangeHandler do with v String
+      print(v)
+  end
+  assert.equals(id0, 0)
+  assert.equals(id1, 1)
+  clearHandlers()
+end
+end
+
+test registerSubmitHandler
+it 'returns sequential ids and grows the registry'
+  clearHandlers()
+  let id0 = registerSubmitHandler do
+      print('s0')
+  end
+  let id1 = registerSubmitHandler do
+      print('s1')
+  end
+  assert.equals(id0, 0)
+  assert.equals(id1, 1)
+  clearHandlers()
+end
+end
+
+test clearHandlers
+it 'wipes all three handler registries'
+  clearHandlers()
+  registerHandler do
+      print('a')
+  end
+  registerChangeHandler do with v String
+      print(v)
+  end
+  registerSubmitHandler do
+      print('s')
+  end
+  clearHandlers()
+  assert.equals(registerHandler do
+      print('b')
+  end, 0)
+  clearHandlers()
+end
+end
+
+test installViewEventBridge
+it 'is idempotent — repeat calls are safe'
+  installViewEventBridge()
+  installViewEventBridge()
+  installViewEventBridge()
+  assert.equals(true, true)
+end
+end

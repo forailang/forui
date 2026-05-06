@@ -126,6 +126,16 @@ do
   onChangeListener = listener
 end
 
+# Unregister the change listener.  Useful in test teardown so that a
+# `mount`-installed listener doesn't leak across test boundaries and
+# clear dirty state during unrelated signal tests; also handy for
+# unmount paths in app code.
+def clearOnSignalChange
+    @return Void
+do
+  onChangeListener = null
+end
+
 # Notify the listener that a signal changed.
 def notifyChange
     @return Void
@@ -525,6 +535,18 @@ it 'registers a listener that runs on notifyChange'
   notifyChange()
   notifyChange()
   assert.equals(changeCounter, 2)
+end
+end
+
+test clearOnSignalChange
+it 'unregisters the listener so subsequent notifyChange calls do nothing'
+  changeCounter = 0
+  onSignalChange(bumpCounter)
+  notifyChange()
+  assert.equals(changeCounter, 1)
+  clearOnSignalChange()
+  notifyChange()
+  assert.equals(changeCounter, 1)
 end
 end
 
