@@ -11,23 +11,23 @@ type def ChangeAction
 end
 
 type Events
-  onClick ClickAction?
-  onChange ChangeAction?
+    onClick ClickAction?
+    onChange ChangeAction?
 end
 
 # Create empty events (all null).
 def emptyEvents
     @return Events
 do
-  Events(onClick: null, onChange: null)
+    Events(onClick: null, onChange: null)
 end
 
 type ViewNode
-  kind String
-  key String
-  props Dictionary
-  children ViewNode[]
-  events Events
+    kind String
+    key String
+    props Dictionary
+    children ViewNode[]
+    events Events
 end
 
 # ── Test helpers ────────────────────────────────────────────────────
@@ -39,7 +39,7 @@ def testNode
     @param kind String
     @return ViewNode
 do
-  ViewNode(kind: kind, key: '', props: {}, children: [], events: emptyEvents())
+    ViewNode(kind: kind, key: '', props: {}, children: [], events: emptyEvents())
 end
 
 # Construct a ViewNode with a single string prop for use in tests.
@@ -49,8 +49,8 @@ def testNodeWithProp
     @param value String
     @return ViewNode
 do
-  let props = set({}, propKey, value)
-  ViewNode(kind: kind, key: '', props: props, children: [], events: emptyEvents())
+    let props = set({}, propKey, value)
+    ViewNode(kind: kind, key: '', props: props, children: [], events: emptyEvents())
 end
 
 # Construct a ViewNode with pre-built children for use in tests.
@@ -59,7 +59,7 @@ def testNodeWithChildren
     @param children ViewNode[]
     @return ViewNode
 do
-  ViewNode(kind: kind, key: '', props: {}, children: children, events: emptyEvents())
+    ViewNode(kind: kind, key: '', props: {}, children: children, events: emptyEvents())
 end
 
 # ── Tree building context ───────────────────────────────────────────
@@ -108,20 +108,20 @@ var frameStarts Int[] = []
 def pushFrame
     @return Void
 do
-  frameStarts = array.append(frameStarts, length(treeStack))
+    frameStarts = array.append(frameStarts, length(treeStack))
 end
 
 # Pop frame and return collected children.
 def popFrame
     @return ViewNode[]
 do
-  let depth = length(frameStarts) - 1
-  let start = frameStarts[depth]
-  let total = length(treeStack)
-  let children = array.slice(treeStack, start, total)
-  treeStack = array.slice(treeStack, 0, start)
-  frameStarts = array.slice(frameStarts, 0, depth)
-  children
+    let depth = length(frameStarts) - 1
+    let start = frameStarts[depth]
+    let total = length(treeStack)
+    let children = array.slice(treeStack, start, total)
+    treeStack = array.slice(treeStack, 0, start)
+    frameStarts = array.slice(frameStarts, 0, depth)
+    children
 end
 
 # Register a completed node in the current frame.
@@ -129,7 +129,7 @@ def registerNode
     @param node ViewNode
     @return Void
 do
-  treeStack = array.append(treeStack, node)
+    treeStack = array.append(treeStack, node)
 end
 
 # Replace the last registered node (used by modifiers to update in-place).
@@ -137,10 +137,10 @@ def replaceLastNode
     @param node ViewNode
     @return Void
 do
-  let last = length(treeStack) - 1
-  if last >= 0
-    treeStack[last] = node
-  end
+    let last = length(treeStack) - 1
+    if last >= 0
+        treeStack[last] = node
+    end
 end
 
 # Build a container node from a children block.
@@ -150,12 +150,12 @@ def buildContainer
     @param children Children
     @return ViewNode
 do
-  pushFrame()
-  children()
-  let kids = popFrame()
-  let node = ViewNode(kind: kind, key: '', props: props, children: kids, events: emptyEvents())
-  registerNode(node)
-  node
+    pushFrame()
+    children()
+    let kids = popFrame()
+    let node = ViewNode(kind: kind, key: '', props: props, children: kids, events: emptyEvents())
+    registerNode(node)
+    node
 end
 
 # ── Tree helpers ────────────────────────────────────────────────────
@@ -170,7 +170,7 @@ def childCount
     @param node ViewNode
     @return Int
 do
-  array.length(node.children)
+    array.length(node.children)
 end
 
 # Direct child at `index` (0-based). Out-of-range indexes trap.
@@ -184,7 +184,7 @@ def getChild
     @param index Int
     @return ViewNode
 do
-  node.children[index]
+    node.children[index]
 end
 
 # Read a String prop by key. Returns `null` when the prop is missing.
@@ -198,7 +198,7 @@ def getProp
     @param key String
     @return String?
 do
-  getString(node.props, key)
+    getString(node.props, key)
 end
 
 # Read an Int prop by key. Returns `null` when the prop is missing.
@@ -211,7 +211,7 @@ def getIntProp
     @param key String
     @return Int?
 do
-  getInt(node.props, key)
+    getInt(node.props, key)
 end
 
 # True when a prop with this key is set on the node (regardless of type).
@@ -224,7 +224,7 @@ def hasProp
     @param key String
     @return Bool
 do
-  hasKey(node.props, key)
+    hasKey(node.props, key)
 end
 
 # Find the first descendant whose `kind` matches (e.g. 'Label', 'Button',
@@ -241,17 +241,17 @@ def findByKind
     @param targetKind String
     @return ViewNode?
 do
-  if node.kind == targetKind
-    node
-  else
-    var result ViewNode? = null
-    for child in node.children
-      if result == null
-        result = findByKind(child, targetKind)
-      end
+    if node.kind == targetKind
+        node
+    else
+        var result ViewNode? = null
+        for child in node.children
+            if result == null
+                result = findByKind(child, targetKind)
+            end
+        end
+        result
     end
-    result
-  end
 end
 
 # Find the first descendant whose string prop `key` equals `value`.
@@ -269,185 +269,185 @@ def findByProp
     @param value String
     @return ViewNode?
 do
-  let prop = getString(node.props, key)
-  if prop? and prop! == value
-    node
-  else
-    var result ViewNode? = null
-    for child in node.children
-      if result == null
-        result = findByProp(child, key, value)
-      end
+    let prop = getString(node.props, key)
+    if prop? and prop! == value
+        node
+    else
+        var result ViewNode? = null
+        for child in node.children
+            if result == null
+                result = findByProp(child, key, value)
+            end
+        end
+        result
     end
-    result
-  end
 end
 
 test findByKind
-it 'finds a direct child by kind'
-  let label = testNode('Label')
-  let root = testNodeWithChildren('VStack', [
-    label
-  ])
-  let found = findByKind(root, 'Label')
-  assert.isNotNull(found)
-  assert.equals(found!.kind, 'Label')
-end
-it 'returns null when kind not found'
-  let root = testNode('VStack')
-  let found = findByKind(root, 'Button')
-  assert.isNull(found)
-end
-it 'finds deeply nested node'
-  let btn = testNode('Button')
-  let inner = testNodeWithChildren('HStack', [
-    btn
-  ])
-  let outer = testNodeWithChildren('VStack', [
-    inner
-  ])
-  let found = findByKind(outer, 'Button')
-  assert.isNotNull(found)
-end
+    it 'finds a direct child by kind'
+        let label = testNode('Label')
+        let root = testNodeWithChildren('VStack', [
+            label
+        ])
+        let found = findByKind(root, 'Label')
+        assert.isNotNull(found)
+        assert.equals(found!.kind, 'Label')
+    end
+    it 'returns null when kind not found'
+        let root = testNode('VStack')
+        let found = findByKind(root, 'Button')
+        assert.isNull(found)
+    end
+    it 'finds deeply nested node'
+        let btn = testNode('Button')
+        let inner = testNodeWithChildren('HStack', [
+            btn
+        ])
+        let outer = testNodeWithChildren('VStack', [
+            inner
+        ])
+        let found = findByKind(outer, 'Button')
+        assert.isNotNull(found)
+    end
 end
 
 test findByProp
-it 'finds node by prop value'
-  let label = testNodeWithProp('Label', 'text', 'hello')
-  let root = testNodeWithChildren('VStack', [
-    label
-  ])
-  let found = findByProp(root, 'text', 'hello')
-  assert.isNotNull(found)
-  assert.equals(found!.kind, 'Label')
-end
-it 'returns null when prop value not found'
-  let label = testNodeWithProp('Label', 'text', 'hello')
-  let root = testNodeWithChildren('VStack', [
-    label
-  ])
-  let found = findByProp(root, 'text', 'world')
-  assert.isNull(found)
-end
+    it 'finds node by prop value'
+        let label = testNodeWithProp('Label', 'text', 'hello')
+        let root = testNodeWithChildren('VStack', [
+            label
+        ])
+        let found = findByProp(root, 'text', 'hello')
+        assert.isNotNull(found)
+        assert.equals(found!.kind, 'Label')
+    end
+    it 'returns null when prop value not found'
+        let label = testNodeWithProp('Label', 'text', 'hello')
+        let root = testNodeWithChildren('VStack', [
+            label
+        ])
+        let found = findByProp(root, 'text', 'world')
+        assert.isNull(found)
+    end
 end
 
 test emptyEvents
-it 'returns an Events with both handlers null'
-  let e = emptyEvents()
-  assert.equals(e.onClick?, false)
-  assert.equals(e.onChange?, false)
-end
+    it 'returns an Events with both handlers null'
+        let e = emptyEvents()
+        assert.equals(e.onClick?, false)
+        assert.equals(e.onChange?, false)
+    end
 end
 
 test pushFrame
-it 'adds a frame marker without altering the tree stack'
-  pushFrame()
-  let depthBefore = length(frameStarts)
-  pushFrame()
-  let depthAfter = length(frameStarts)
-  assert.equals(depthAfter, depthBefore + 1)
-  popFrame()
-  popFrame()
-end
+    it 'adds a frame marker without altering the tree stack'
+        pushFrame()
+        let depthBefore = length(frameStarts)
+        pushFrame()
+        let depthAfter = length(frameStarts)
+        assert.equals(depthAfter, depthBefore + 1)
+        popFrame()
+        popFrame()
+    end
 end
 
 test popFrame
-it 'returns the children registered since the matching pushFrame'
-  pushFrame()
-  registerNode(testNode('A'))
-  registerNode(testNode('B'))
-  let kids = popFrame()
-  assert.equals(array.length(kids), 2)
-  assert.equals(kids[0].kind, 'A')
-  assert.equals(kids[1].kind, 'B')
-end
+    it 'returns the children registered since the matching pushFrame'
+        pushFrame()
+        registerNode(testNode('A'))
+        registerNode(testNode('B'))
+        let kids = popFrame()
+        assert.equals(array.length(kids), 2)
+        assert.equals(kids[0].kind, 'A')
+        assert.equals(kids[1].kind, 'B')
+    end
 end
 
 test registerNode
-it 'appends the node to the active frame'
-  pushFrame()
-  registerNode(testNode('X'))
-  let kids = popFrame()
-  assert.equals(array.length(kids), 1)
-  assert.equals(kids[0].kind, 'X')
-end
+    it 'appends the node to the active frame'
+        pushFrame()
+        registerNode(testNode('X'))
+        let kids = popFrame()
+        assert.equals(array.length(kids), 1)
+        assert.equals(kids[0].kind, 'X')
+    end
 end
 
 test replaceLastNode
-it 'swaps the most recently registered node in place'
-  pushFrame()
-  registerNode(testNode('Old'))
-  replaceLastNode(testNode('New'))
-  let kids = popFrame()
-  assert.equals(array.length(kids), 1)
-  assert.equals(kids[0].kind, 'New')
-end
+    it 'swaps the most recently registered node in place'
+        pushFrame()
+        registerNode(testNode('Old'))
+        replaceLastNode(testNode('New'))
+        let kids = popFrame()
+        assert.equals(array.length(kids), 1)
+        assert.equals(kids[0].kind, 'New')
+    end
 end
 
 test buildContainer
-it 'wraps a children block into a kind-tagged ViewNode'
-  pushFrame()
-  let outer = buildContainer('Box', {}) do
-      registerNode(testNode('Inner'))
-  end
-  popFrame()
-  assert.equals(outer.kind, 'Box')
-  assert.equals(childCount(outer), 1)
-  assert.equals(getChild(outer, 0).kind, 'Inner')
-end
+    it 'wraps a children block into a kind-tagged ViewNode'
+        pushFrame()
+        let outer = buildContainer('Box', {}) do
+            registerNode(testNode('Inner'))
+        end
+        popFrame()
+        assert.equals(outer.kind, 'Box')
+        assert.equals(childCount(outer), 1)
+        assert.equals(getChild(outer, 0).kind, 'Inner')
+    end
 end
 
 test childCount
-it 'returns the number of direct children'
-  let n = testNodeWithChildren('Box', [
-    testNode('A')
-    testNode('B')
-    testNode('C')
-  ])
-  assert.equals(childCount(n), 3)
-end
-it 'is zero for a leaf'
-  assert.equals(childCount(testNode('Leaf')), 0)
-end
+    it 'returns the number of direct children'
+        let n = testNodeWithChildren('Box', [
+            testNode('A')
+            testNode('B')
+            testNode('C')
+        ])
+        assert.equals(childCount(n), 3)
+    end
+    it 'is zero for a leaf'
+        assert.equals(childCount(testNode('Leaf')), 0)
+    end
 end
 
 test getChild
-it 'returns the direct child at the given 0-based index'
-  let n = testNodeWithChildren('Box', [
-    testNode('First')
-    testNode('Second')
-  ])
-  assert.equals(getChild(n, 0).kind, 'First')
-  assert.equals(getChild(n, 1).kind, 'Second')
-end
+    it 'returns the direct child at the given 0-based index'
+        let n = testNodeWithChildren('Box', [
+            testNode('First')
+            testNode('Second')
+        ])
+        assert.equals(getChild(n, 0).kind, 'First')
+        assert.equals(getChild(n, 1).kind, 'Second')
+    end
 end
 
 test getProp
-it 'returns the value when the prop is set'
-  let n = testNodeWithProp('Label', 'text', 'hi')
-  assert.equals(getProp(n, 'text'), 'hi')
-end
-it 'returns null when the prop is absent'
-  assert.isNull(getProp(testNode('Label'), 'text'))
-end
+    it 'returns the value when the prop is set'
+        let n = testNodeWithProp('Label', 'text', 'hi')
+        assert.equals(getProp(n, 'text'), 'hi')
+    end
+    it 'returns null when the prop is absent'
+        assert.isNull(getProp(testNode('Label'), 'text'))
+    end
 end
 
 test getIntProp
-it 'returns the value when the prop is set as an Int'
-  let props = set({}, 'padding', 12)
-  let n = ViewNode(kind: 'X', key: '', props: props, children: [], events: emptyEvents())
-  assert.equals(getIntProp(n, 'padding'), 12)
-end
-it 'returns null when the prop is absent'
-  assert.isNull(getIntProp(testNode('X'), 'padding'))
-end
+    it 'returns the value when the prop is set as an Int'
+        let props = set({}, 'padding', 12)
+        let n = ViewNode(kind: 'X', key: '', props: props, children: [], events: emptyEvents())
+        assert.equals(getIntProp(n, 'padding'), 12)
+    end
+    it 'returns null when the prop is absent'
+        assert.isNull(getIntProp(testNode('X'), 'padding'))
+    end
 end
 
 test hasProp
-it 'is true for a set prop'
-  assert.isTrue(hasProp(testNodeWithProp('Label', 'text', 'hi'), 'text'))
-end
-it 'is false for a missing prop'
-  assert.isFalse(hasProp(testNode('Label'), 'text'))
-end
+    it 'is true for a set prop'
+        assert.isTrue(hasProp(testNodeWithProp('Label', 'text', 'hi'), 'text'))
+    end
+    it 'is false for a missing prop'
+        assert.isFalse(hasProp(testNode('Label'), 'text'))
+    end
 end

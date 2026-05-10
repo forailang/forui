@@ -1,23 +1,213 @@
 use std.array
 
 # ── Modifiers (UFCS-friendly) ───────────────────────────────────────
-# Add inner padding around a node's content. `amount` is in pixels and
-# is applied to all four sides.
+# Add inner padding around a node's content. Pixels.
+# 
+# - `padding(n)` — all four sides equal to `n`.
+# - `padding(v, h)` — vertical (top/bottom) and horizontal (left/right).
+# - `padding(t, r, b, l)` — explicit CSS shorthand order.
+# 
+# Unset positional args default to `-1`; any side that comes through as
+# `-1` is treated as "not provided" and falls back to the shorter form.
 # 
 # ```fai
 # VStack do
 #     Label('content')
 # end.padding(16)
+# Label('cell').padding(4, 8)
+# Label('cell').padding(4, 8, 4, 8)
 # ```
 def padding
+    @param node ViewNode
+    @param top Int
+    @param right Int, default: -1
+    @param bottom Int, default: -1
+    @param left Int, default: -1
+    @return ViewNode
+do
+    var props = node.props
+    if right < 0
+        props = set(props, 'padding', top)
+    else if bottom < 0
+        props = set(props, 'paddingTop', top)
+        props = set(props, 'paddingBottom', top)
+        props = set(props, 'paddingLeft', right)
+        props = set(props, 'paddingRight', right)
+    else
+        props = set(props, 'paddingTop', top)
+        props = set(props, 'paddingRight', right)
+        props = set(props, 'paddingBottom', bottom)
+        props = set(props, 'paddingLeft', left)
+    end
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    replaceLastNode(result)
+    result
+end
+
+# Set top-side padding only (pixels). Other sides are unaffected.
+# 
+# ```fai
+# Label('row').paddingTop(8)
+# ```
+def paddingTop
     @param node ViewNode
     @param amount Int
     @return ViewNode
 do
-  let props = set(node.props, 'padding', amount)
-  let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
-  replaceLastNode(result)
-  result
+    let props = set(node.props, 'paddingTop', amount)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    replaceLastNode(result)
+    result
+end
+
+# Set bottom-side padding only (pixels). Other sides are unaffected.
+# 
+# ```fai
+# Label('row').paddingBottom(8)
+# ```
+def paddingBottom
+    @param node ViewNode
+    @param amount Int
+    @return ViewNode
+do
+    let props = set(node.props, 'paddingBottom', amount)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    replaceLastNode(result)
+    result
+end
+
+# Set left-side padding only (pixels). Other sides are unaffected.
+# 
+# ```fai
+# Label('row').paddingLeft(12)
+# ```
+def paddingLeft
+    @param node ViewNode
+    @param amount Int
+    @return ViewNode
+do
+    let props = set(node.props, 'paddingLeft', amount)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    replaceLastNode(result)
+    result
+end
+
+# Set right-side padding only (pixels). Other sides are unaffected.
+# 
+# ```fai
+# Label('row').paddingRight(12)
+# ```
+def paddingRight
+    @param node ViewNode
+    @param amount Int
+    @return ViewNode
+do
+    let props = set(node.props, 'paddingRight', amount)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    replaceLastNode(result)
+    result
+end
+
+# Add outer margin around a node. Pixels. Mirrors `padding`.
+# 
+# - `margin(n)` — all four sides equal to `n`.
+# - `margin(v, h)` — vertical (top/bottom) and horizontal (left/right).
+# - `margin(t, r, b, l)` — explicit CSS shorthand order.
+# 
+# ```fai
+# Label('hero').margin(24)
+# Label('cell').margin(4, 8)
+# Label('cell').margin(4, 8, 4, 8)
+# ```
+def margin
+    @param node ViewNode
+    @param top Int
+    @param right Int, default: -1
+    @param bottom Int, default: -1
+    @param left Int, default: -1
+    @return ViewNode
+do
+    var props = node.props
+    if right < 0
+        props = set(props, 'margin', top)
+    else if bottom < 0
+        props = set(props, 'marginTop', top)
+        props = set(props, 'marginBottom', top)
+        props = set(props, 'marginLeft', right)
+        props = set(props, 'marginRight', right)
+    else
+        props = set(props, 'marginTop', top)
+        props = set(props, 'marginRight', right)
+        props = set(props, 'marginBottom', bottom)
+        props = set(props, 'marginLeft', left)
+    end
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    replaceLastNode(result)
+    result
+end
+
+# Set top-side margin only (pixels). Other sides are unaffected.
+# 
+# ```fai
+# Label('row').marginTop(8)
+# ```
+def marginTop
+    @param node ViewNode
+    @param amount Int
+    @return ViewNode
+do
+    let props = set(node.props, 'marginTop', amount)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    replaceLastNode(result)
+    result
+end
+
+# Set bottom-side margin only (pixels). Other sides are unaffected.
+# 
+# ```fai
+# Label('row').marginBottom(8)
+# ```
+def marginBottom
+    @param node ViewNode
+    @param amount Int
+    @return ViewNode
+do
+    let props = set(node.props, 'marginBottom', amount)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    replaceLastNode(result)
+    result
+end
+
+# Set left-side margin only (pixels). Other sides are unaffected.
+# 
+# ```fai
+# Label('row').marginLeft(12)
+# ```
+def marginLeft
+    @param node ViewNode
+    @param amount Int
+    @return ViewNode
+do
+    let props = set(node.props, 'marginLeft', amount)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    replaceLastNode(result)
+    result
+end
+
+# Set right-side margin only (pixels). Other sides are unaffected.
+# 
+# ```fai
+# Label('row').marginRight(12)
+# ```
+def marginRight
+    @param node ViewNode
+    @param amount Int
+    @return ViewNode
+do
+    let props = set(node.props, 'marginRight', amount)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    replaceLastNode(result)
+    result
 end
 
 # Set the background colour (hex string, named colour, or rgba).
@@ -30,10 +220,10 @@ def background
     @param color String
     @return ViewNode
 do
-  let props = set(node.props, 'background', color)
-  let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
-  replaceLastNode(result)
-  result
+    let props = set(node.props, 'background', color)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    replaceLastNode(result)
+    result
 end
 
 # Set the foreground (text) colour.
@@ -46,10 +236,10 @@ def foreground
     @param color String
     @return ViewNode
 do
-  let props = set(node.props, 'foreground', color)
-  let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
-  replaceLastNode(result)
-  result
+    let props = set(node.props, 'foreground', color)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    replaceLastNode(result)
+    result
 end
 
 # Round corners. `radius` is in pixels.
@@ -62,10 +252,31 @@ def cornerRadius
     @param radius Int
     @return ViewNode
 do
-  let props = set(node.props, 'cornerRadius', radius)
-  let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
-  replaceLastNode(result)
-  result
+    let props = set(node.props, 'cornerRadius', radius)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    replaceLastNode(result)
+    result
+end
+
+# Add a solid border around a node. `width` is in pixels and `color`
+# is any CSS colour string (hex, named, rgba). For per-side borders
+# we'll add `borderTop` / `borderRight` / etc. when there's a real
+# need.
+# 
+# ```fai
+# Label('Card').padding(12).border(1, '#e0e6ec').cornerRadius(8)
+# ```
+def border
+    @param node ViewNode
+    @param width Int
+    @param color String
+    @return ViewNode
+do
+    var props = set(node.props, 'borderWidth', width)
+    props = set(props, 'borderColor', color)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    replaceLastNode(result)
+    result
 end
 
 # Set the font size in points on a ViewNode. Chainable via UFCS.
@@ -78,10 +289,10 @@ def fontSize
     @param size Int
     @return ViewNode
 do
-  let props = set(node.props, 'fontSize', size)
-  let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
-  replaceLastNode(result)
-  result
+    let props = set(node.props, 'fontSize', size)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    replaceLastNode(result)
+    result
 end
 
 # Set the font weight. Use numeric strings like '400', '600', '700' or
@@ -95,10 +306,10 @@ def fontWeight
     @param weight String
     @return ViewNode
 do
-  let props = set(node.props, 'fontWeight', weight)
-  let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
-  replaceLastNode(result)
-  result
+    let props = set(node.props, 'fontWeight', weight)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    replaceLastNode(result)
+    result
 end
 
 # Set the CSS `flex` shorthand. Useful for fixing width/height on a
@@ -112,10 +323,10 @@ def flex
     @param value String
     @return ViewNode
 do
-  let props = set(node.props, 'flex', value)
-  let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
-  replaceLastNode(result)
-  result
+    let props = set(node.props, 'flex', value)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    replaceLastNode(result)
+    result
 end
 
 # Set the CSS `width`. Accepts any valid CSS length — `'100%'`,
@@ -132,10 +343,10 @@ def width
     @param value String
     @return ViewNode
 do
-  let props = set(node.props, 'width', value)
-  let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
-  replaceLastNode(result)
-  result
+    let props = set(node.props, 'width', value)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    replaceLastNode(result)
+    result
 end
 
 # Set the CSS `max-width`. Accepts any valid CSS length. Typical use
@@ -152,10 +363,10 @@ def maxWidth
     @param value String
     @return ViewNode
 do
-  let props = set(node.props, 'maxWidth', value)
-  let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
-  replaceLastNode(result)
-  result
+    let props = set(node.props, 'maxWidth', value)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    replaceLastNode(result)
+    result
 end
 
 # Set opacity in the range 0.0 (fully transparent) to 1.0 (fully opaque).
@@ -168,10 +379,10 @@ def opacity
     @param value Float
     @return ViewNode
 do
-  let props = set(node.props, 'opacity', value)
-  let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
-  replaceLastNode(result)
-  result
+    let props = set(node.props, 'opacity', value)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    replaceLastNode(result)
+    result
 end
 
 # Set a stable key for list reconciliation. Apply this to each node
@@ -189,124 +400,240 @@ def withKey
     @param value String
     @return ViewNode
 do
-  let result = ViewNode(kind: node.kind, key: value, props: node.props, children: node.children, events: node.events)
-  replaceLastNode(result)
-  result
+    let result = ViewNode(kind: node.kind, key: value, props: node.props, children: node.children, events: node.events)
+    replaceLastNode(result)
+    result
 end
 
 test padding
-it 'adds padding to a node'
-  let l = Label('hello')
-    .padding(10)
-  assert.equals(l.kind, 'Label')
-  assert.equals(getIntProp(l, 'padding'), 10)
-end
-it 'chains multiple modifiers'
-  let l = Label('hello')
-    .padding(10)
-    .background('blue')
-    .foreground('white')
-  assert.equals(getIntProp(l, 'padding'), 10)
-  assert.equals(getProp(l, 'background'), 'blue')
-  assert.equals(getProp(l, 'foreground'), 'white')
-end
-it 'builds a complete UI tree'
-  let tree = VStack do
-      Label('Title')
-        .fontSize(24)
-      HStack do
-          Button('Save')
-            .onClick do
-                print('save')
+    it 'adds padding to a node'
+        let l = Label('hello')
+            .padding(10)
+        assert.equals(l.kind, 'Label')
+        assert.equals(getIntProp(l, 'padding'), 10)
+    end
+    it 'two-arg form sets vertical and horizontal sides'
+        let l = Label('hello')
+            .padding(4, 8)
+        assert.equals(getIntProp(l, 'paddingTop'), 4)
+        assert.equals(getIntProp(l, 'paddingBottom'), 4)
+        assert.equals(getIntProp(l, 'paddingLeft'), 8)
+        assert.equals(getIntProp(l, 'paddingRight'), 8)
+        assert.equals(hasProp(l, 'padding'), false)
+    end
+    it 'four-arg form sets each side individually in t/r/b/l order'
+        let l = Label('hello')
+            .padding(1, 2, 3, 4)
+        assert.equals(getIntProp(l, 'paddingTop'), 1)
+        assert.equals(getIntProp(l, 'paddingRight'), 2)
+        assert.equals(getIntProp(l, 'paddingBottom'), 3)
+        assert.equals(getIntProp(l, 'paddingLeft'), 4)
+        assert.equals(hasProp(l, 'padding'), false)
+    end
+    it 'chains multiple modifiers'
+        let l = Label('hello')
+            .padding(10)
+            .background('blue')
+            .foreground('white')
+        assert.equals(getIntProp(l, 'padding'), 10)
+        assert.equals(getProp(l, 'background'), 'blue')
+        assert.equals(getProp(l, 'foreground'), 'white')
+    end
+    it 'builds a complete UI tree'
+        let tree = VStack do
+            Label('Title')
+                .fontSize(24)
+            HStack do
+                Button('Save')
+                    .onClick do
+                        print('save')
+                    end
+                Button('Cancel')
             end
-          Button('Cancel')
-      end
-      Spacer()
-  end
-  assert.equals(tree.kind, 'VStack')
-  assert.equals(childCount(tree), 3)
-  assert.equals(getChild(tree, 1).kind, 'HStack')
-  assert.equals(childCount(getChild(tree, 1)), 2)
-  assert.equals(getChild(tree, 2).kind, 'Spacer')
-end
+            Spacer()
+        end
+        assert.equals(tree.kind, 'VStack')
+        assert.equals(childCount(tree), 3)
+        assert.equals(getChild(tree, 1).kind, 'HStack')
+        assert.equals(childCount(getChild(tree, 1)), 2)
+        assert.equals(getChild(tree, 2).kind, 'Spacer')
+    end
 end
 
 test background
-it 'sets the background prop'
-  let n = Label('x')
-    .background('#fff')
-  assert.equals(getProp(n, 'background'), '#fff')
-end
+    it 'sets the background prop'
+        let n = Label('x')
+            .background('#fff')
+        assert.equals(getProp(n, 'background'), '#fff')
+    end
 end
 
 test foreground
-it 'sets the foreground prop'
-  let n = Label('x')
-    .foreground('#000')
-  assert.equals(getProp(n, 'foreground'), '#000')
-end
+    it 'sets the foreground prop'
+        let n = Label('x')
+            .foreground('#000')
+        assert.equals(getProp(n, 'foreground'), '#000')
+    end
 end
 
 test cornerRadius
-it 'sets the cornerRadius prop'
-  let n = Label('x')
-    .cornerRadius(8)
-  assert.equals(getIntProp(n, 'cornerRadius'), 8)
+    it 'sets the cornerRadius prop'
+        let n = Label('x')
+            .cornerRadius(8)
+        assert.equals(getIntProp(n, 'cornerRadius'), 8)
+    end
 end
+
+test border
+    it 'sets borderWidth and borderColor on the node'
+        let n = Label('x')
+            .border(2, '#e0e6ec')
+        assert.equals(getIntProp(n, 'borderWidth'), 2)
+        assert.equals(getProp(n, 'borderColor'), '#e0e6ec')
+    end
 end
 
 test fontSize
-it 'sets the fontSize prop'
-  let n = Label('x')
-    .fontSize(24)
-  assert.equals(getIntProp(n, 'fontSize'), 24)
-end
+    it 'sets the fontSize prop'
+        let n = Label('x')
+            .fontSize(24)
+        assert.equals(getIntProp(n, 'fontSize'), 24)
+    end
 end
 
 test fontWeight
-it 'sets the fontWeight prop'
-  let n = Label('x')
-    .fontWeight('700')
-  assert.equals(getProp(n, 'fontWeight'), '700')
-end
+    it 'sets the fontWeight prop'
+        let n = Label('x')
+            .fontWeight('700')
+        assert.equals(getProp(n, 'fontWeight'), '700')
+    end
 end
 
 test flex
-it 'sets the flex prop'
-  let n = Label('x')
-    .flex('1')
-  assert.equals(getProp(n, 'flex'), '1')
-end
+    it 'sets the flex prop'
+        let n = Label('x')
+            .flex('1')
+        assert.equals(getProp(n, 'flex'), '1')
+    end
 end
 
 test width
-it 'sets the width prop'
-  let n = Label('x')
-    .width('120px')
-  assert.equals(getProp(n, 'width'), '120px')
-end
+    it 'sets the width prop'
+        let n = Label('x')
+            .width('120px')
+        assert.equals(getProp(n, 'width'), '120px')
+    end
 end
 
 test maxWidth
-it 'sets the maxWidth prop'
-  let n = Label('x')
-    .maxWidth('640px')
-  assert.equals(getProp(n, 'maxWidth'), '640px')
-end
+    it 'sets the maxWidth prop'
+        let n = Label('x')
+            .maxWidth('640px')
+        assert.equals(getProp(n, 'maxWidth'), '640px')
+    end
 end
 
 test opacity
-it 'sets the opacity prop'
-  let n = Label('x')
-    .opacity(0.5)
-  assert.equals(getProp(n, 'opacity'), 0.5)
-end
+    it 'sets the opacity prop'
+        let n = Label('x')
+            .opacity(0.5)
+        assert.equals(getProp(n, 'opacity'), 0.5)
+    end
 end
 
 test withKey
-it 'sets a stable identity key on the node'
-  let n = Label('x')
-    .withKey('row-7')
-  assert.equals(n.key, 'row-7')
+    it 'sets a stable identity key on the node'
+        let n = Label('x')
+            .withKey('row-7')
+        assert.equals(n.key, 'row-7')
+    end
 end
+
+test paddingTop
+    it 'sets the paddingTop prop'
+        let n = Label('x')
+            .paddingTop(6)
+        assert.equals(getIntProp(n, 'paddingTop'), 6)
+    end
+end
+
+test paddingBottom
+    it 'sets the paddingBottom prop'
+        let n = Label('x')
+            .paddingBottom(6)
+        assert.equals(getIntProp(n, 'paddingBottom'), 6)
+    end
+end
+
+test paddingLeft
+    it 'sets the paddingLeft prop'
+        let n = Label('x')
+            .paddingLeft(6)
+        assert.equals(getIntProp(n, 'paddingLeft'), 6)
+    end
+end
+
+test paddingRight
+    it 'sets the paddingRight prop'
+        let n = Label('x')
+            .paddingRight(6)
+        assert.equals(getIntProp(n, 'paddingRight'), 6)
+    end
+end
+
+test margin
+    it 'one-arg form sets a single margin prop'
+        let n = Label('x')
+            .margin(12)
+        assert.equals(getIntProp(n, 'margin'), 12)
+    end
+    it 'two-arg form sets vertical and horizontal sides'
+        let n = Label('x')
+            .margin(4, 8)
+        assert.equals(getIntProp(n, 'marginTop'), 4)
+        assert.equals(getIntProp(n, 'marginBottom'), 4)
+        assert.equals(getIntProp(n, 'marginLeft'), 8)
+        assert.equals(getIntProp(n, 'marginRight'), 8)
+        assert.equals(hasProp(n, 'margin'), false)
+    end
+    it 'four-arg form sets each side individually in t/r/b/l order'
+        let n = Label('x')
+            .margin(1, 2, 3, 4)
+        assert.equals(getIntProp(n, 'marginTop'), 1)
+        assert.equals(getIntProp(n, 'marginRight'), 2)
+        assert.equals(getIntProp(n, 'marginBottom'), 3)
+        assert.equals(getIntProp(n, 'marginLeft'), 4)
+    end
+end
+
+test marginTop
+    it 'sets the marginTop prop'
+        let n = Label('x')
+            .marginTop(6)
+        assert.equals(getIntProp(n, 'marginTop'), 6)
+    end
+end
+
+test marginBottom
+    it 'sets the marginBottom prop'
+        let n = Label('x')
+            .marginBottom(6)
+        assert.equals(getIntProp(n, 'marginBottom'), 6)
+    end
+end
+
+test marginLeft
+    it 'sets the marginLeft prop'
+        let n = Label('x')
+            .marginLeft(6)
+        assert.equals(getIntProp(n, 'marginLeft'), 6)
+    end
+end
+
+test marginRight
+    it 'sets the marginRight prop'
+        let n = Label('x')
+            .marginRight(6)
+        assert.equals(getIntProp(n, 'marginRight'), 6)
+    end
 end

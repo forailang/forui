@@ -19,12 +19,12 @@ def attachClickHandler
     @param handler ClickAction
     @return ViewNode
 do
-  let handlerId = registerHandler(handler)
-  let props = set(node.props, 'handlerId', handlerId)
-  let events = Events(onClick: handler, onChange: node.events.onChange)
-  let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: events)
-  replaceLastNode(result)
-  result
+    let handlerId = registerHandler(handler)
+    let props = set(node.props, 'handlerId', handlerId)
+    let events = Events(onClick: handler, onChange: node.events.onChange)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: events)
+    replaceLastNode(result)
+    result
 end
 
 # AttachChangeHandler.
@@ -33,12 +33,12 @@ def attachChangeHandler
     @param handler ChangeAction
     @return ViewNode
 do
-  let changeId = registerChangeHandler(handler)
-  let props = set(node.props, 'changeHandlerId', changeId)
-  let events = Events(onClick: node.events.onClick, onChange: handler)
-  let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: events)
-  replaceLastNode(result)
-  result
+    let changeId = registerChangeHandler(handler)
+    let props = set(node.props, 'changeHandlerId', changeId)
+    let events = Events(onClick: node.events.onClick, onChange: handler)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: events)
+    replaceLastNode(result)
+    result
 end
 
 # Register a click handler and return its ID.
@@ -46,9 +46,9 @@ def registerHandler
     @param handler ClickAction
     @return Int
 do
-  let id = length(eventHandlers)
-  eventHandlers = array.append(eventHandlers, handler)
-  id
+    let id = length(eventHandlers)
+    eventHandlers = array.append(eventHandlers, handler)
+    id
 end
 
 # Register a change handler and return its ID.
@@ -56,9 +56,9 @@ def registerChangeHandler
     @param handler ChangeAction
     @return Int
 do
-  let id = length(changeHandlers)
-  changeHandlers = array.append(changeHandlers, handler)
-  id
+    let id = length(changeHandlers)
+    changeHandlers = array.append(changeHandlers, handler)
+    id
 end
 
 # Register a submit handler (Enter-key on a TextInput). Returns its ID.
@@ -66,18 +66,18 @@ def registerSubmitHandler
     @param handler ClickAction
     @return Int
 do
-  let id = length(submitHandlers)
-  submitHandlers = array.append(submitHandlers, handler)
-  id
+    let id = length(submitHandlers)
+    submitHandlers = array.append(submitHandlers, handler)
+    id
 end
 
 # Clear all registered handlers (call before each render).
 def clearHandlers
     @return Void
 do
-  eventHandlers = []
-  changeHandlers = []
-  submitHandlers = []
+    eventHandlers = []
+    changeHandlers = []
+    submitHandlers = []
 end
 
 var bridgeInstalled = false
@@ -92,34 +92,34 @@ var bridgeInstalled = false
 def installViewEventBridge
     @return Void
 do
-  if !bridgeInstalled
-    bridgeInstalled = true
-    let _click = events.on('view:click') do with e Event
-        let id = getInt(e.data, 'id')!
-        if id >= 0
-          if id < length(eventHandlers)
-            eventHandlers[id]()
-          end
+    if !bridgeInstalled
+        bridgeInstalled = true
+        let _click = events.on('view:click') do with e Event
+            let id = getInt(e.data, 'id')!
+            if id >= 0
+                if id < length(eventHandlers)
+                    eventHandlers[id]()
+                end
+            end
+        end
+        let _input = events.on('view:input') do with e Event
+            let id = getInt(e.data, 'id')!
+            let value = getString(e.data, 'value')!
+            if id >= 0
+                if id < length(changeHandlers)
+                    changeHandlers[id](value)
+                end
+            end
+        end
+        let _submit = events.on('view:submit') do with e Event
+            let id = getInt(e.data, 'id')!
+            if id >= 0
+                if id < length(submitHandlers)
+                    submitHandlers[id]()
+                end
+            end
         end
     end
-    let _input = events.on('view:input') do with e Event
-        let id = getInt(e.data, 'id')!
-        let value = getString(e.data, 'value')!
-        if id >= 0
-          if id < length(changeHandlers)
-            changeHandlers[id](value)
-          end
-        end
-    end
-    let _submit = events.on('view:submit') do with e Event
-        let id = getInt(e.data, 'id')!
-        if id >= 0
-          if id < length(submitHandlers)
-            submitHandlers[id]()
-          end
-        end
-    end
-  end
 end
 
 # ── Event handlers ──────────────────────────────────────────────────
@@ -137,7 +137,7 @@ def onClick
     @param handler ClickAction
     @return ViewNode
 do
-  attachClickHandler(node, handler)
+    attachClickHandler(node, handler)
 end
 
 # Attach a change handler as a UFCS modifier. The handler receives the
@@ -153,137 +153,137 @@ def onChange
     @param handler ChangeAction
     @return ViewNode
 do
-  attachChangeHandler(node, handler)
+    attachChangeHandler(node, handler)
 end
 
 test onClick
-it 'attaches a click handler closure'
-  let b = Button('Save')
-    .onClick do
-        print('clicked')
+    it 'attaches a click handler closure'
+        let b = Button('Save')
+            .onClick do
+                print('clicked')
+            end
+        assert.equals(b.events.onClick?, true)
     end
-  assert.equals(b.events.onClick?, true)
-end
-it 'button with handler via onClick param sets onClick'
-  let b = Button('Inline', onClick: do
-      print('x')
-  end)
-  assert.equals(b.events.onClick?, true)
-end
-it 'button with no handler leaves onClick null'
-  let b = Button('Plain')
-  assert.equals(b.events.onClick?, false)
-end
+    it 'button with handler via onClick param sets onClick'
+        let b = Button('Inline', onClick: do
+            print('x')
+        end)
+        assert.equals(b.events.onClick?, true)
+    end
+    it 'button with no handler leaves onClick null'
+        let b = Button('Plain')
+        assert.equals(b.events.onClick?, false)
+    end
 end
 
 test onChange
-it 'attaches a change handler closure'
-  clearHandlers()
-  let n = TextInput('Q')
-    .onChange do with v String
-        print('got: ' + v)
+    it 'attaches a change handler closure'
+        clearHandlers()
+        let n = TextInput('Q')
+            .onChange do with v String
+                print('got: ' + v)
+            end
+        assert.equals(n.events.onChange?, true)
+        clearHandlers()
     end
-  assert.equals(n.events.onChange?, true)
-  clearHandlers()
-end
 end
 
 test attachClickHandler
-it 'sets handlerId and registers the closure'
-  clearHandlers()
-  let b = Button('A')
-  let withHandler = attachClickHandler(b) do
-      print('hit')
-  end
-  assert.equals(getIntProp(withHandler, 'handlerId')!, 0)
-  assert.equals(withHandler.events.onClick?, true)
-  clearHandlers()
-end
+    it 'sets handlerId and registers the closure'
+        clearHandlers()
+        let b = Button('A')
+        let withHandler = attachClickHandler(b) do
+            print('hit')
+        end
+        assert.equals(getIntProp(withHandler, 'handlerId')!, 0)
+        assert.equals(withHandler.events.onClick?, true)
+        clearHandlers()
+    end
 end
 
 test attachChangeHandler
-it 'sets changeHandlerId and registers the closure'
-  clearHandlers()
-  let n = TextInput('Q')
-  let withHandler = attachChangeHandler(n) do with v String
-      print('got: ' + v)
-  end
-  assert.equals(getIntProp(withHandler, 'changeHandlerId')!, 0)
-  assert.equals(withHandler.events.onChange?, true)
-  clearHandlers()
-end
+    it 'sets changeHandlerId and registers the closure'
+        clearHandlers()
+        let n = TextInput('Q')
+        let withHandler = attachChangeHandler(n) do with v String
+            print('got: ' + v)
+        end
+        assert.equals(getIntProp(withHandler, 'changeHandlerId')!, 0)
+        assert.equals(withHandler.events.onChange?, true)
+        clearHandlers()
+    end
 end
 
 test registerHandler
-it 'returns sequential ids and grows the registry'
-  clearHandlers()
-  let id0 = registerHandler do
-      print('h0')
-  end
-  let id1 = registerHandler do
-      print('h1')
-  end
-  assert.equals(id0, 0)
-  assert.equals(id1, 1)
-  clearHandlers()
-end
+    it 'returns sequential ids and grows the registry'
+        clearHandlers()
+        let id0 = registerHandler do
+            print('h0')
+        end
+        let id1 = registerHandler do
+            print('h1')
+        end
+        assert.equals(id0, 0)
+        assert.equals(id1, 1)
+        clearHandlers()
+    end
 end
 
 test registerChangeHandler
-it 'returns sequential ids and grows the registry'
-  clearHandlers()
-  let id0 = registerChangeHandler do with v String
-      print(v)
-  end
-  let id1 = registerChangeHandler do with v String
-      print(v)
-  end
-  assert.equals(id0, 0)
-  assert.equals(id1, 1)
-  clearHandlers()
-end
+    it 'returns sequential ids and grows the registry'
+        clearHandlers()
+        let id0 = registerChangeHandler do with v String
+            print(v)
+        end
+        let id1 = registerChangeHandler do with v String
+            print(v)
+        end
+        assert.equals(id0, 0)
+        assert.equals(id1, 1)
+        clearHandlers()
+    end
 end
 
 test registerSubmitHandler
-it 'returns sequential ids and grows the registry'
-  clearHandlers()
-  let id0 = registerSubmitHandler do
-      print('s0')
-  end
-  let id1 = registerSubmitHandler do
-      print('s1')
-  end
-  assert.equals(id0, 0)
-  assert.equals(id1, 1)
-  clearHandlers()
-end
+    it 'returns sequential ids and grows the registry'
+        clearHandlers()
+        let id0 = registerSubmitHandler do
+            print('s0')
+        end
+        let id1 = registerSubmitHandler do
+            print('s1')
+        end
+        assert.equals(id0, 0)
+        assert.equals(id1, 1)
+        clearHandlers()
+    end
 end
 
 test clearHandlers
-it 'wipes all three handler registries'
-  clearHandlers()
-  registerHandler do
-      print('a')
-  end
-  registerChangeHandler do with v String
-      print(v)
-  end
-  registerSubmitHandler do
-      print('s')
-  end
-  clearHandlers()
-  assert.equals(registerHandler do
-      print('b')
-  end, 0)
-  clearHandlers()
-end
+    it 'wipes all three handler registries'
+        clearHandlers()
+        registerHandler do
+            print('a')
+        end
+        registerChangeHandler do with v String
+            print(v)
+        end
+        registerSubmitHandler do
+            print('s')
+        end
+        clearHandlers()
+        assert.equals(registerHandler do
+            print('b')
+        end, 0)
+        clearHandlers()
+    end
 end
 
 test installViewEventBridge
-it 'is idempotent — repeat calls are safe'
-  installViewEventBridge()
-  installViewEventBridge()
-  installViewEventBridge()
-  assert.equals(true, true)
-end
+    it 'is idempotent — repeat calls are safe'
+        installViewEventBridge()
+        installViewEventBridge()
+        installViewEventBridge()
+        assert.equals(true, true)
+    end
 end

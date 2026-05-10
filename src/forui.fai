@@ -50,31 +50,31 @@ def mount
     @param render AdapterRender
     @return Void
 do
-  installViewEventBridge()
-  mountedApp = app
-  mountedAdapter = render
-  onSignalChange do
-      rerender()
-  end
-  if mountedAdapter?
-    clearHandlers()
-    clearDirty()
-    resetHooks()
-    isRendering = true
-    let tree = mountedApp!()
-    isRendering = false
-    let initialOps = [
-      DiffOp(action: 'replace', path: '', node: tree, props: null)
-    ]
-    lastDiffOps = initialOps
-    mountedAdapter!(tree, initialOps)
-    previousTree = tree
-    let stillDirty = hasDirtySignals()
-    clearDirty()
-    if stillDirty
-      rerender()
+    installViewEventBridge()
+    mountedApp = app
+    mountedAdapter = render
+    onSignalChange do
+        rerender()
     end
-  end
+    if mountedAdapter?
+        clearHandlers()
+        clearDirty()
+        resetHooks()
+        isRendering = true
+        let tree = mountedApp!()
+        isRendering = false
+        let initialOps = [
+            DiffOp(action: 'replace', path: '', node: tree, props: null)
+        ]
+        lastDiffOps = initialOps
+        mountedAdapter!(tree, initialOps)
+        previousTree = tree
+        let stillDirty = hasDirtySignals()
+        clearDirty()
+        if stillDirty
+            rerender()
+        end
+    end
 end
 
 # Re-render the mounted app. Called automatically after signal changes.
@@ -83,31 +83,31 @@ end
 def rerender
     @return Void
 do
-  if !isRendering
-    if mountedApp?
-      if mountedAdapter?
-        isRendering = true
-        clearHandlers()
-        resetHooks()
-        let tree = mountedApp!()
-        isRendering = false
-        var ops DiffOp[] = []
-        if previousTree?
-          ops = diffTrees(previousTree!, tree)
-          lastDiffOps = ops
-          if array.length(ops) > 0
-            mountedAdapter!(tree, ops)
-          end
+    if !isRendering
+        if mountedApp?
+            if mountedAdapter?
+                isRendering = true
+                clearHandlers()
+                resetHooks()
+                let tree = mountedApp!()
+                isRendering = false
+                var ops DiffOp[] = []
+                if previousTree?
+                    ops = diffTrees(previousTree!, tree)
+                    lastDiffOps = ops
+                    if array.length(ops) > 0
+                        mountedAdapter!(tree, ops)
+                    end
+                end
+                previousTree = tree
+                let stillDirty = hasDirtySignals()
+                clearDirty()
+                if stillDirty
+                    rerender()
+                end
+            end
         end
-        previousTree = tree
-        let stillDirty = hasDirtySignals()
-        clearDirty()
-        if stillDirty
-          rerender()
-        end
-      end
     end
-  end
 end
 
 # Return the diff ops produced by the most recent render cycle.
@@ -115,7 +115,7 @@ end
 def getLastDiffOps
     @return DiffOp[]
 do
-  lastDiffOps
+    lastDiffOps
 end
 
 # Server-side render. Returns the ViewNode tree for the given path.
@@ -127,17 +127,17 @@ def renderSSR
     @param path String
     @return ViewNode
 do
-  let savedHooks = saveHookState()
-  restoreHookState([])
-  setPathFromPlatform(path)
-  enterSsrMode()
-  clearHandlers()
-  clearDirty()
-  resetHooks()
-  let tree = app()
-  exitSsrMode()
-  restoreHookState(savedHooks)
-  tree
+    let savedHooks = saveHookState()
+    restoreHookState([])
+    setPathFromPlatform(path)
+    enterSsrMode()
+    clearHandlers()
+    clearDirty()
+    resetHooks()
+    let tree = app()
+    exitSsrMode()
+    restoreHookState(savedHooks)
+    tree
 end
 
 # ── UI Testing ───────────────────────────────────────────────────────
@@ -160,7 +160,7 @@ def testMount
     @param app RenderFn
     @return ViewNode
 do
-  renderSSR(app, '/')
+    renderSSR(app, '/')
 end
 
 # Like `testMount`, but with a specific route path. Use this to test
@@ -175,27 +175,27 @@ def testMountAt
     @param path String
     @return ViewNode
 do
-  renderSSR(app, path)
+    renderSSR(app, path)
 end
 
 test testMount
-it 'returns the root ViewNode of the component'
-  let tree = testMount(staticApp)
-  assert.equals(tree.kind, 'Label')
-end
-it 'returns a tree whose props are inspectable'
-  let tree = testMount(staticApp)
-  let text = getProp(tree, 'text')
-  assert.equals(text?, true)
-  assert.equals(text!, 'hello')
-end
+    it 'returns the root ViewNode of the component'
+        let tree = testMount(staticApp)
+        assert.equals(tree.kind, 'Label')
+    end
+    it 'returns a tree whose props are inspectable'
+        let tree = testMount(staticApp)
+        let text = getProp(tree, 'text')
+        assert.equals(text?, true)
+        assert.equals(text!, 'hello')
+    end
 end
 
 test testMountAt
-it 'renders with the given path'
-  let tree = testMountAt(staticApp, '/about')
-  assert.equals(tree.kind, 'Label')
-end
+    it 'renders with the given path'
+        let tree = testMountAt(staticApp, '/about')
+        assert.equals(tree.kind, 'Label')
+    end
 end
 
 # ── Test helpers ─────────────────────────────────────────────────────
@@ -204,14 +204,14 @@ def testForuiLabel
     @param text String
     @return ViewNode
 do
-  ViewNode(kind: 'Label', key: '', props: set({}, 'text', text), children: [], events: emptyEvents())
+    ViewNode(kind: 'Label', key: '', props: set({}, 'text', text), children: [], events: emptyEvents())
 end
 
 # Static render function — always returns the same Label node.
 def staticApp
     @return ViewNode
 do
-  testForuiLabel('hello')
+    testForuiLabel('hello')
 end
 
 var changingAppText = 'initial'
@@ -221,7 +221,7 @@ var changingAppText = 'initial'
 def changingApp
     @return ViewNode
 do
-  testForuiLabel(changingAppText)
+    testForuiLabel(changingAppText)
 end
 
 var testOps DiffOp[] = []
@@ -235,168 +235,168 @@ def testAdapter
     @param ops DiffOp[]
     @return Void
 do
-  testOps = ops
-  testCallCount = testCallCount + 1
+    testOps = ops
+    testCallCount = testCallCount + 1
 end
 
 # ResetCapture.
 def resetCapture
     @return Void
 do
-  testOps = []
-  testCallCount = 0
+    testOps = []
+    testCallCount = 0
 end
 
 test mount
-it 'calls adapter once immediately after mounting'
-  resetCapture()
-  mount(staticApp, testAdapter)
-  assert.equals(testCallCount, 1)
-end
-it 'initial call delivers a single replace op'
-  resetCapture()
-  mount(staticApp, testAdapter)
-  assert.equals(array.length(testOps), 1)
-  assert.equals(testOps[0].action, 'replace')
-end
-it 'replace op is at the root path'
-  resetCapture()
-  mount(staticApp, testAdapter)
-  assert.equals(testOps[0].path, '')
-end
-it 'replace op node matches the rendered tree'
-  resetCapture()
-  mount(staticApp, testAdapter)
-  assert.equals(testOps[0].node!.kind, 'Label')
-end
-afterEach
-  clearOnSignalChange()
-end
+    it 'calls adapter once immediately after mounting'
+        resetCapture()
+        mount(staticApp, testAdapter)
+        assert.equals(testCallCount, 1)
+    end
+    it 'initial call delivers a single replace op'
+        resetCapture()
+        mount(staticApp, testAdapter)
+        assert.equals(array.length(testOps), 1)
+        assert.equals(testOps[0].action, 'replace')
+    end
+    it 'replace op is at the root path'
+        resetCapture()
+        mount(staticApp, testAdapter)
+        assert.equals(testOps[0].path, '')
+    end
+    it 'replace op node matches the rendered tree'
+        resetCapture()
+        mount(staticApp, testAdapter)
+        assert.equals(testOps[0].node!.kind, 'Label')
+    end
+    afterEach
+        clearOnSignalChange()
+    end
 end
 
 test rerender
-it 'does not call adapter when tree is unchanged'
-  resetCapture()
-  mount(staticApp, testAdapter)
-  let callsAfterMount = testCallCount
-  rerender()
-  assert.equals(testCallCount, callsAfterMount)
-end
-it 'calls adapter with update op when a prop changes'
-  resetCapture()
-  changingAppText = 'before'
-  mount(changingApp, testAdapter)
-  let callsAfterMount = testCallCount
-  changingAppText = 'after'
-  rerender()
-  assert.equals(testCallCount, callsAfterMount + 1)
-  assert.equals(array.length(testOps), 1)
-  assert.equals(testOps[0].action, 'update')
-end
-afterEach
-  clearOnSignalChange()
-end
+    it 'does not call adapter when tree is unchanged'
+        resetCapture()
+        mount(staticApp, testAdapter)
+        let callsAfterMount = testCallCount
+        rerender()
+        assert.equals(testCallCount, callsAfterMount)
+    end
+    it 'calls adapter with update op when a prop changes'
+        resetCapture()
+        changingAppText = 'before'
+        mount(changingApp, testAdapter)
+        let callsAfterMount = testCallCount
+        changingAppText = 'after'
+        rerender()
+        assert.equals(testCallCount, callsAfterMount + 1)
+        assert.equals(array.length(testOps), 1)
+        assert.equals(testOps[0].action, 'update')
+    end
+    afterEach
+        clearOnSignalChange()
+    end
 end
 
 test getLastDiffOps
-it 'returns the initial replace op after mount'
-  resetCapture()
-  mount(staticApp, testAdapter)
-  let ops = getLastDiffOps()
-  assert.equals(array.length(ops), 1)
-  assert.equals(ops[0].action, 'replace')
-end
-it 'returns diff ops after a re-render with changes'
-  resetCapture()
-  changingAppText = 'before'
-  mount(changingApp, testAdapter)
-  changingAppText = 'after'
-  rerender()
-  let ops = getLastDiffOps()
-  assert.equals(array.length(ops), 1)
-  assert.equals(ops[0].action, 'update')
-end
-afterEach
-  clearOnSignalChange()
-end
+    it 'returns the initial replace op after mount'
+        resetCapture()
+        mount(staticApp, testAdapter)
+        let ops = getLastDiffOps()
+        assert.equals(array.length(ops), 1)
+        assert.equals(ops[0].action, 'replace')
+    end
+    it 'returns diff ops after a re-render with changes'
+        resetCapture()
+        changingAppText = 'before'
+        mount(changingApp, testAdapter)
+        changingAppText = 'after'
+        rerender()
+        let ops = getLastDiffOps()
+        assert.equals(array.length(ops), 1)
+        assert.equals(ops[0].action, 'update')
+    end
+    afterEach
+        clearOnSignalChange()
+    end
 end
 
 test renderSSR
-it 'returns the rendered tree'
-  let tree = renderSSR(staticApp, '/')
-  assert.equals(tree.kind, 'Label')
-end
-it 'does not call any mounted adapter'
-  resetCapture()
-  mount(staticApp, testAdapter)
-  let callsBeforeSSR = testCallCount
-  renderSSR(staticApp, '/about')
-  assert.equals(testCallCount, callsBeforeSSR)
-end
-it 'isolates hook state — mounted app rerenders correctly after SSR'
-  resetCapture()
-  changingAppText = 'before'
-  mount(changingApp, testAdapter)
-  renderSSR(staticApp, '/about')
-  changingAppText = 'after'
-  rerender()
-  assert.equals(testOps[0].action, 'update')
-end
-afterEach
-  clearOnSignalChange()
-end
+    it 'returns the rendered tree'
+        let tree = renderSSR(staticApp, '/')
+        assert.equals(tree.kind, 'Label')
+    end
+    it 'does not call any mounted adapter'
+        resetCapture()
+        mount(staticApp, testAdapter)
+        let callsBeforeSSR = testCallCount
+        renderSSR(staticApp, '/about')
+        assert.equals(testCallCount, callsBeforeSSR)
+    end
+    it 'isolates hook state — mounted app rerenders correctly after SSR'
+        resetCapture()
+        changingAppText = 'before'
+        mount(changingApp, testAdapter)
+        renderSSR(staticApp, '/about')
+        changingAppText = 'after'
+        rerender()
+        assert.equals(testOps[0].action, 'update')
+    end
+    afterEach
+        clearOnSignalChange()
+    end
 end
 
 test testForuiLabel
-it 'builds a Label node carrying the given text prop'
-  let node = testForuiLabel('hi')
-  assert.equals(node.kind, 'Label')
-  assert.equals(getProp(node, 'text')!, 'hi')
-end
+    it 'builds a Label node carrying the given text prop'
+        let node = testForuiLabel('hi')
+        assert.equals(node.kind, 'Label')
+        assert.equals(getProp(node, 'text')!, 'hi')
+    end
 end
 
 test staticApp
-it 'always returns a Label with the static text'
-  let a = staticApp()
-  let b = staticApp()
-  assert.equals(a.kind, 'Label')
-  assert.equals(getProp(a, 'text')!, 'hello')
-  assert.equals(getProp(b, 'text')!, 'hello')
-end
+    it 'always returns a Label with the static text'
+        let a = staticApp()
+        let b = staticApp()
+        assert.equals(a.kind, 'Label')
+        assert.equals(getProp(a, 'text')!, 'hello')
+        assert.equals(getProp(b, 'text')!, 'hello')
+    end
 end
 
 test changingApp
-it 'tracks the current value of changingAppText'
-  changingAppText = 'first'
-  assert.equals(getProp(changingApp(), 'text')!, 'first')
-  changingAppText = 'second'
-  assert.equals(getProp(changingApp(), 'text')!, 'second')
-end
+    it 'tracks the current value of changingAppText'
+        changingAppText = 'first'
+        assert.equals(getProp(changingApp(), 'text')!, 'first')
+        changingAppText = 'second'
+        assert.equals(getProp(changingApp(), 'text')!, 'second')
+    end
 end
 
 test testAdapter
-it 'captures the ops and increments the call count'
-  resetCapture()
-  let tree = testForuiLabel('x')
-  let ops = [
-    DiffOp(action: 'replace', path: '', node: tree, props: null)
-  ]
-  testAdapter(tree, ops)
-  assert.equals(testCallCount, 1)
-  assert.equals(array.length(testOps), 1)
-  testAdapter(tree, ops)
-  assert.equals(testCallCount, 2)
-end
+    it 'captures the ops and increments the call count'
+        resetCapture()
+        let tree = testForuiLabel('x')
+        let ops = [
+            DiffOp(action: 'replace', path: '', node: tree, props: null)
+        ]
+        testAdapter(tree, ops)
+        assert.equals(testCallCount, 1)
+        assert.equals(array.length(testOps), 1)
+        testAdapter(tree, ops)
+        assert.equals(testCallCount, 2)
+    end
 end
 
 test resetCapture
-it 'clears captured ops and the call count'
-  testCallCount = 5
-  testOps = [
-    DiffOp(action: 'remove', path: '0', node: null, props: null)
-  ]
-  resetCapture()
-  assert.equals(testCallCount, 0)
-  assert.equals(array.length(testOps), 0)
-end
+    it 'clears captured ops and the call count'
+        testCallCount = 5
+        testOps = [
+            DiffOp(action: 'remove', path: '0', node: null, props: null)
+        ]
+        resetCapture()
+        assert.equals(testCallCount, 0)
+        assert.equals(array.length(testOps), 0)
+    end
 end
