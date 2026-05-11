@@ -107,7 +107,10 @@ do
 end
 
 # ── Leaf primitives ─────────────────────────────────────────────────
-# Display text. Apply modifiers via UFCS: `.fontSize()`, `.foreground()`,
+# Short inline/control text. Use `Label` for nav labels, form labels,
+# badges, captions, and other compact UI copy. For body prose use
+# `Paragraph`; for page or section titles use `Heading`.
+# Apply modifiers via UFCS: `.fontSize()`, `.foreground()`,
 # `.fontWeight()`, `.padding()`, etc.
 # 
 # ```fai
@@ -119,6 +122,47 @@ def Label
 do
     let props = set({}, 'text', text)
     let node = ViewNode(kind: 'Label', key: '', props: props, children: [], events: emptyEvents())
+    registerNode(node)
+    node
+end
+
+# Block-level prose text. Use for body copy, descriptions, quotes,
+# helper text, and multiline content that should occupy the available
+# column width. The HTML renderer emits a semantic `<p>` with the
+# `fai-paragraph` class.
+# 
+# ```fai
+# Paragraph('Tests are required and run with every build.')
+#     .lineHeight('1.65')
+#     .foreground('#3f4a55')
+# ```
+def Paragraph
+    @param text String
+    @return ViewNode
+do
+    let props = set({}, 'text', text)
+    let node = ViewNode(kind: 'Paragraph', key: '', props: props, children: [], events: emptyEvents())
+    registerNode(node)
+    node
+end
+
+# Semantic heading text. Use for document, page, and section titles.
+# `level` maps to HTML h1-h6 when rendering to HTML and defaults to 3
+# for reusable section headings. Invalid HTML levels fall back to h3 in
+# the HTML renderer.
+# 
+# ```fai
+# Heading('Forai', level: 1)
+# Heading('Project Workflow')
+# ```
+def Heading
+    @param text String
+    @param level Int, default: 3
+    @return ViewNode
+do
+    var props = set({}, 'text', text)
+    props = set(props, 'level', level)
+    let node = ViewNode(kind: 'Heading', key: '', props: props, children: [], events: emptyEvents())
     registerNode(node)
     node
 end
@@ -453,6 +497,28 @@ test Label
         let s = Spacer()
         assert.equals(s.kind, 'Spacer')
         assert.equals(childCount(s), 0)
+    end
+end
+
+test Paragraph
+    it 'creates a paragraph with text'
+        let p = Paragraph('body copy')
+        assert.equals(p.kind, 'Paragraph')
+        assert.equals(getProp(p, 'text'), 'body copy')
+    end
+end
+
+test Heading
+    it 'creates a heading with default level 3'
+        let h = Heading('Section')
+        assert.equals(h.kind, 'Heading')
+        assert.equals(getProp(h, 'text'), 'Section')
+        assert.equals(getIntProp(h, 'level'), 3)
+    end
+    it 'creates a heading with an explicit level'
+        let h = Heading('Page', level: 1)
+        assert.equals(h.kind, 'Heading')
+        assert.equals(getIntProp(h, 'level'), 1)
     end
 end
 

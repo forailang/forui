@@ -199,6 +199,9 @@ end
 
 ```fai
 Label('Hello, world')
+Paragraph('Body copy for a prose block')
+Heading('Section title')
+Heading('Page title', level: 1)
 Button('Save', onClick: do ... end)
 TextInput('placeholder', signalValue: mySignal)
 TextInput('Email', signalValue: email, inputType: 'email')
@@ -209,6 +212,10 @@ Spacer()
 Divider()
 ImageView('/logo.png')
 ```
+
+`Label` is for short UI/control text such as nav labels, badges, captions,
+and form labels. Use `Paragraph` for body prose and `Heading` for semantic page
+or section headings. `Heading` defaults to level 3.
 
 ---
 
@@ -227,7 +234,6 @@ Label('Title')
   .cornerRadius(12)
   .opacity(0.8)
   .flex('1')
-  .withKey('my-title')
   .onClick(do print('tapped') end)
 ```
 
@@ -239,11 +245,32 @@ Label('Title')
 | `.cornerRadius(n)` | `Int` | Border radius |
 | `.fontSize(n)` | `Int` | Font size |
 | `.fontWeight(w)` | `String` | `'400'`, `'600'`, `'700'`, etc. |
+| `.lineHeight(v)` | `String` | CSS line-height (`'1.6'`, `'24px'`) |
+| `.fontStyle(v)` | `String` | CSS font-style (`'italic'`) |
+| `.letterSpacing(v)` | `String` | CSS letter-spacing (`'0.02em'`) |
+| `.textAlign(v)` | `String` | CSS text-align |
+| `.fontFamily(v)` | `String` | CSS font-family |
 | `.flex(v)` | `String` | CSS flex value (`'1'`, `'0 0 auto'`) |
+| `.alignItems(v)` | `String` | Flex cross-axis alignment |
+| `.justifyContent(v)` | `String` | Flex main-axis alignment |
+| `.flexWrap(v)` | `String` | Flex wrapping |
+| `.gap(n)` | `Int` | Flex/grid gap in px |
+| `.alignSelf(v)` | `String` | Child alignment in flex parent |
+| `.display(v)` | `String` | CSS display |
+| `.width(v)` / `.minWidth(v)` / `.maxWidth(v)` | `String` | CSS width constraints |
+| `.height(v)` / `.minHeight(v)` | `String` | CSS height constraints |
+| `.position(v)` / `.top(n)` / `.zIndex(n)` | `String` / `Int` | Positioning helpers |
+| `.centered()` | none | Horizontal auto margins |
+| `.border(n, color)` / `.borderLeft(n, color)` | `Int`, `String` | Solid borders |
 | `.opacity(v)` | `Float` | `0.0`–`1.0` |
-| `.withKey(k)` | `String` | Stable identity for diffing |
+| `.cssClass(name)` | `String` | Stylesheet escape hatch |
+| `.withKey(k)` | `String` | Stable identity for diffing, not styling |
 | `.onClick(do...end)` | `ClickAction` | Click handler |
 | `.onChange(do with v String...end)` | `ChangeAction` | Change handler |
+
+Use `cssClass` for reusable stylesheet rules, pseudo-selectors, media queries,
+syntax highlighting, or missing Forui helpers. Use `withKey` only for stable
+identity in dynamic lists.
 
 ---
 

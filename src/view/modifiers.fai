@@ -279,6 +279,20 @@ do
     result
 end
 
+# Add a solid border on the left side only.
+def borderLeft
+    @param node ViewNode
+    @param width Int
+    @param color String
+    @return ViewNode
+do
+    var props = set(node.props, 'borderLeftWidth', width)
+    props = set(props, 'borderLeftColor', color)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    replaceLastNode(result)
+    result
+end
+
 # Set the font size in points on a ViewNode. Chainable via UFCS.
 # 
 # ```fai
@@ -329,6 +343,81 @@ do
     result
 end
 
+# Set cross-axis alignment for a flex container such as HStack or
+# VStack. Accepts CSS values like 'flex-start', 'center', 'stretch'.
+def alignItems
+    @param node ViewNode
+    @param value String
+    @return ViewNode
+do
+    let props = set(node.props, 'alignItems', value)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    replaceLastNode(result)
+    result
+end
+
+# Set main-axis alignment for a flex container. Accepts CSS values like
+# 'flex-end', 'center', 'space-between', and 'space-around'.
+def justifyContent
+    @param node ViewNode
+    @param value String
+    @return ViewNode
+do
+    let props = set(node.props, 'justifyContent', value)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    replaceLastNode(result)
+    result
+end
+
+# Set flex wrapping for a flex container. Use 'wrap', 'nowrap', or
+# 'wrap-reverse'.
+def flexWrap
+    @param node ViewNode
+    @param value String
+    @return ViewNode
+do
+    let props = set(node.props, 'flexWrap', value)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    replaceLastNode(result)
+    result
+end
+
+# Set flex/grid gap in pixels.
+def gap
+    @param node ViewNode
+    @param amount Int
+    @return ViewNode
+do
+    let props = set(node.props, 'gap', amount)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    replaceLastNode(result)
+    result
+end
+
+# Set a child node's alignment inside its parent flex container.
+def alignSelf
+    @param node ViewNode
+    @param value String
+    @return ViewNode
+do
+    let props = set(node.props, 'alignSelf', value)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    replaceLastNode(result)
+    result
+end
+
+# Set CSS display for escape-valve layout cases like block-level text.
+def display
+    @param node ViewNode
+    @param value String
+    @return ViewNode
+do
+    let props = set(node.props, 'display', value)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    replaceLastNode(result)
+    result
+end
+
 # Set the CSS `width`. Accepts any valid CSS length — `'100%'`,
 # `'480px'`, `'50vw'`, etc. Usually paired with `maxWidth` for a
 # fluid-but-capped page container.
@@ -344,6 +433,42 @@ def width
     @return ViewNode
 do
     let props = set(node.props, 'width', value)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    replaceLastNode(result)
+    result
+end
+
+# Set the CSS `min-width`. Accepts any valid CSS length.
+def minWidth
+    @param node ViewNode
+    @param value String
+    @return ViewNode
+do
+    let props = set(node.props, 'minWidth', value)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    replaceLastNode(result)
+    result
+end
+
+# Set the CSS `height`. Accepts any valid CSS length.
+def height
+    @param node ViewNode
+    @param value String
+    @return ViewNode
+do
+    let props = set(node.props, 'height', value)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    replaceLastNode(result)
+    result
+end
+
+# Set the CSS `min-height`. Accepts any valid CSS length.
+def minHeight
+    @param node ViewNode
+    @param value String
+    @return ViewNode
+do
+    let props = set(node.props, 'minHeight', value)
     let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
     replaceLastNode(result)
     result
@@ -369,6 +494,54 @@ do
     result
 end
 
+# Center a block in its parent using horizontal auto margins. Pair with
+# `width('100%')` and `maxWidth(...)` for page shells.
+def centered
+    @param node ViewNode
+    @return ViewNode
+do
+    let props = set(node.props, 'centered', 'true')
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    replaceLastNode(result)
+    result
+end
+
+# Set CSS positioning.
+def position
+    @param node ViewNode
+    @param value String
+    @return ViewNode
+do
+    let props = set(node.props, 'position', value)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    replaceLastNode(result)
+    result
+end
+
+# Set CSS top offset in pixels.
+def top
+    @param node ViewNode
+    @param amount Int
+    @return ViewNode
+do
+    let props = set(node.props, 'top', amount)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    replaceLastNode(result)
+    result
+end
+
+# Set CSS z-index.
+def zIndex
+    @param node ViewNode
+    @param value Int
+    @return ViewNode
+do
+    let props = set(node.props, 'zIndex', value)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    replaceLastNode(result)
+    result
+end
+
 # Set opacity in the range 0.0 (fully transparent) to 1.0 (fully opaque).
 # 
 # ```fai
@@ -385,10 +558,74 @@ do
     result
 end
 
+# Set text line-height. String values allow unitless, px, rem, and
+# percentage forms.
+def lineHeight
+    @param node ViewNode
+    @param value String
+    @return ViewNode
+do
+    let props = set(node.props, 'lineHeight', value)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    replaceLastNode(result)
+    result
+end
+
+# Set CSS font-style, for example 'italic'.
+def fontStyle
+    @param node ViewNode
+    @param value String
+    @return ViewNode
+do
+    let props = set(node.props, 'fontStyle', value)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    replaceLastNode(result)
+    result
+end
+
+# Set CSS letter-spacing. String values allow em/px/rem units.
+def letterSpacing
+    @param node ViewNode
+    @param value String
+    @return ViewNode
+do
+    let props = set(node.props, 'letterSpacing', value)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    replaceLastNode(result)
+    result
+end
+
+# Set CSS text-align.
+def textAlign
+    @param node ViewNode
+    @param value String
+    @return ViewNode
+do
+    let props = set(node.props, 'textAlign', value)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    replaceLastNode(result)
+    result
+end
+
+# Set CSS font-family.
+def fontFamily
+    @param node ViewNode
+    @param value String
+    @return ViewNode
+do
+    let props = set(node.props, 'fontFamily', value)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    replaceLastNode(result)
+    result
+end
+
 # Set a stable key for list reconciliation. Apply this to each node
 # produced inside a `for` loop so the diff can track identity across
 # renders — otherwise items may flicker or lose focus when the list
 # reorders.
+# Do not use `withKey` as a styling hook. HTML renderers may expose the
+# key as `data-fai-key` for patching/debugging, but CSS should use
+# first-class modifiers or `cssClass` instead.
 # 
 # ```fai
 # for task in tasks
@@ -424,9 +661,10 @@ end
 # ```
 # 
 # It also works on any other node kind — `Label('beta').cssClass('badge')`
-# is fine — but resist using it as a general styling escape hatch.
-# Modifiers like `padding` / `foreground` stay the right tool for
-# inline numbers and colors.
+# is fine — but treat it as an escape hatch for reusable app CSS,
+# pseudo-selectors, media queries, syntax highlighting, or missing Forui
+# modifiers. Prefer first-class modifiers for ordinary layout,
+# typography, spacing, and colors.
 def cssClass
     @param node ViewNode
     @param name String
@@ -526,6 +764,15 @@ test border
     end
 end
 
+test borderLeft
+    it 'sets borderLeftWidth and borderLeftColor on the node'
+        let n = Label('x')
+            .borderLeft(2, '#dde5dc')
+        assert.equals(getIntProp(n, 'borderLeftWidth'), 2)
+        assert.equals(getProp(n, 'borderLeftColor'), '#dde5dc')
+    end
+end
+
 test fontSize
     it 'sets the fontSize prop'
         let n = Label('x')
@@ -550,6 +797,54 @@ test flex
     end
 end
 
+test alignItems
+    it 'sets the alignItems prop'
+        let n = Label('x')
+            .alignItems('stretch')
+        assert.equals(getProp(n, 'alignItems'), 'stretch')
+    end
+end
+
+test justifyContent
+    it 'sets the justifyContent prop'
+        let n = Label('x')
+            .justifyContent('flex-end')
+        assert.equals(getProp(n, 'justifyContent'), 'flex-end')
+    end
+end
+
+test flexWrap
+    it 'sets the flexWrap prop'
+        let n = Label('x')
+            .flexWrap('wrap')
+        assert.equals(getProp(n, 'flexWrap'), 'wrap')
+    end
+end
+
+test gap
+    it 'sets the gap prop'
+        let n = Label('x')
+            .gap(24)
+        assert.equals(getIntProp(n, 'gap'), 24)
+    end
+end
+
+test alignSelf
+    it 'sets the alignSelf prop'
+        let n = Label('x')
+            .alignSelf('stretch')
+        assert.equals(getProp(n, 'alignSelf'), 'stretch')
+    end
+end
+
+test display
+    it 'sets the display prop'
+        let n = Label('x')
+            .display('block')
+        assert.equals(getProp(n, 'display'), 'block')
+    end
+end
+
 test width
     it 'sets the width prop'
         let n = Label('x')
@@ -566,11 +861,107 @@ test maxWidth
     end
 end
 
+test minWidth
+    it 'sets the minWidth prop'
+        let n = Label('x')
+            .minWidth('240px')
+        assert.equals(getProp(n, 'minWidth'), '240px')
+    end
+end
+
+test height
+    it 'sets the height prop'
+        let n = Label('x')
+            .height('100%')
+        assert.equals(getProp(n, 'height'), '100%')
+    end
+end
+
+test minHeight
+    it 'sets the minHeight prop'
+        let n = Label('x')
+            .minHeight('100vh')
+        assert.equals(getProp(n, 'minHeight'), '100vh')
+    end
+end
+
+test centered
+    it 'sets the centered prop'
+        let n = Label('x')
+            .centered()
+        assert.equals(getProp(n, 'centered'), 'true')
+    end
+end
+
+test position
+    it 'sets the position prop'
+        let n = Label('x')
+            .position('sticky')
+        assert.equals(getProp(n, 'position'), 'sticky')
+    end
+end
+
+test top
+    it 'sets the top prop'
+        let n = Label('x')
+            .top(0)
+        assert.equals(getIntProp(n, 'top'), 0)
+    end
+end
+
+test zIndex
+    it 'sets the zIndex prop'
+        let n = Label('x')
+            .zIndex(20)
+        assert.equals(getIntProp(n, 'zIndex'), 20)
+    end
+end
+
 test opacity
     it 'sets the opacity prop'
         let n = Label('x')
             .opacity(0.5)
         assert.equals(getProp(n, 'opacity'), 0.5)
+    end
+end
+
+test lineHeight
+    it 'sets the lineHeight prop'
+        let n = Label('x')
+            .lineHeight('1.65')
+        assert.equals(getProp(n, 'lineHeight'), '1.65')
+    end
+end
+
+test fontStyle
+    it 'sets the fontStyle prop'
+        let n = Label('x')
+            .fontStyle('italic')
+        assert.equals(getProp(n, 'fontStyle'), 'italic')
+    end
+end
+
+test letterSpacing
+    it 'sets the letterSpacing prop'
+        let n = Label('x')
+            .letterSpacing('0.02em')
+        assert.equals(getProp(n, 'letterSpacing'), '0.02em')
+    end
+end
+
+test textAlign
+    it 'sets the textAlign prop'
+        let n = Label('x')
+            .textAlign('left')
+        assert.equals(getProp(n, 'textAlign'), 'left')
+    end
+end
+
+test fontFamily
+    it 'sets the fontFamily prop'
+        let n = Label('x')
+            .fontFamily('Inter, sans-serif')
+        assert.equals(getProp(n, 'fontFamily'), 'Inter, sans-serif')
     end
 end
 

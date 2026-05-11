@@ -124,7 +124,8 @@ frame:
 
 ```fai
 VStack do
-    Label('Title').fontSize(24).fontWeight('700')
+    Heading('Title', level: 2).fontSize(24).fontWeight('700')
+    Paragraph('Body copy uses paragraph semantics and stretches to the column.')
     HStack do
         Label('Left')
         Spacer()
@@ -133,13 +134,23 @@ VStack do
 end.padding(16).background('#fafafa')
 ```
 
-Leaves are component functions (`Label`, `Button`, `TextInput`,
-`Toggle`, `SegmentedControl`, `Spacer`, `Divider`, `ImageView`).
+Leaves are component functions (`Label`, `Paragraph`, `Heading`, `Button`,
+`TextInput`, `Toggle`, `SegmentedControl`, `Spacer`, `Divider`, `ImageView`).
+Use `Label` for short UI/control text, `Paragraph` for prose, and
+`Heading(text, level: n)` for page or section headings. `Heading` defaults to
+level 3.
 
 Modifiers (`padding`, `background`, `foreground`, `cornerRadius`,
-`fontSize`, `fontWeight`, `flex`, `width`, `maxWidth`, `opacity`,
-`withKey`) attach via UFCS — they're ordinary functions defined in
-`Forui.view`.
+`fontSize`, `fontWeight`, `lineHeight`, `fontStyle`, `letterSpacing`,
+`textAlign`, `fontFamily`, `flex`, `alignItems`, `justifyContent`, `flexWrap`,
+`gap`, `alignSelf`, `display`, `width`, `minWidth`, `maxWidth`, `height`,
+`minHeight`, `position`, `top`, `zIndex`, `centered`, `border`, `borderLeft`,
+`opacity`, `cssClass`, `withKey`) attach via UFCS — they're ordinary functions
+defined in `Forui.view`.
+
+Use `cssClass` as an escape hatch for reusable stylesheet rules,
+pseudo-selectors, media queries, syntax highlighting, or missing Forui helpers.
+Use `withKey` only for stable identity in dynamic lists, not as a styling hook.
 
 ### Two-way binding with signals
 

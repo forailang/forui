@@ -14,10 +14,23 @@ platform adapter. The adapter receives a diff list after every signal change.
 Status helpers: `isLoading(sig)`, `isLoaded(sig)`, `isError(sig)`.
 
 **View tree** — build UI by returning `ViewNode` from your render function.
-Primitives: `Label`, `Button`, `TextInput`, `Toggle`, `VStack`, `HStack`,
-`ZStack`, `ScrollView`, `Spacer`, `Divider`, `ImageView`, `SegmentedControl`.
+Primitives: `Label`, `Paragraph`, `Heading`, `Button`, `TextInput`, `Toggle`,
+`VStack`, `HStack`, `ZStack`, `ScrollView`, `Spacer`, `Divider`, `ImageView`,
+`SegmentedControl`.
 Modifiers (all must be imported): `padding`, `background`, `foreground`,
-`cornerRadius`, `fontSize`, `fontWeight`, `flex`, `opacity`, `withKey`.
+`cornerRadius`, `fontSize`, `fontWeight`, `lineHeight`, `fontStyle`,
+`letterSpacing`, `textAlign`, `fontFamily`, `flex`, `alignItems`,
+`justifyContent`, `flexWrap`, `gap`, `alignSelf`, `display`, `width`,
+`minWidth`, `maxWidth`, `height`, `minHeight`, `position`, `top`, `zIndex`,
+`centered`, `border`, `borderLeft`, `opacity`, `cssClass`, `withKey`.
+
+Use `Label` for short UI/control text. Use `Paragraph` for body copy and
+multiline prose. Use `Heading(text, level: n)` for page and section headings;
+the default level is 3.
+
+Use `cssClass` as an escape hatch for reusable CSS, pseudo-selectors, media
+queries, syntax highlighting, or missing Forui helpers. Use `withKey` only for
+stable reconciliation identity in dynamic lists, not for styling hooks.
 
 **Router** — client-side routing. `navigate(path)` changes routes.
 `routeParam(name)` extracts URL params. `Router` / `Route` components.
