@@ -123,6 +123,82 @@ do
     node
 end
 
+# Preformatted text container. Renders as a semantic `<pre>` block on
+# the web — children appear with their literal whitespace preserved.
+# Pair with `Code` for syntax-style code blocks; pair with `Label` for
+# any other text whose layout should be byte-for-byte faithful.
+# 
+# ```fai
+# Pre do
+#     Code do
+#         Span(source)
+#     end
+# end.padding(16).background('#1b1b1b').cornerRadius(8)
+# ```
+def Pre
+    @param children Children
+    @return ViewNode
+do
+    buildContainer('Pre', {}, children)
+end
+
+# Inline `<code>` container. Holds text via `Label` / `Span`
+# children — the latter pairs naturally with the `cssClass`
+# modifier for syntax-highlighted token streams.
+# 
+# Most useful inside `Pre` for code blocks (the canonical
+# `<pre><code>…</code></pre>` markup), but also fine inline in
+# prose when a snippet should carry code semantics for
+# screenreaders and copy-paste tools.
+# 
+# ```fai
+# Pre do
+#     Code do
+#         Span('def').cssClass('tok-kw')
+#         Span(' add')
+#     end
+# end
+# 
+# Label('To install run ')
+# Code do
+#     Label('curl -fsSL ...')
+# end
+# ```
+def Code
+    @param children Children
+    @return ViewNode
+do
+    buildContainer('Code', {}, children)
+end
+
+# Inline text fragment. Renders as a plain `<span>` and is the
+# canonical leaf for splitting a run of text into independently-
+# styled pieces — chiefly for syntax-highlighted token streams
+# inside a `Pre` / `Code` block, but also fine for tagging a word
+# inside prose.
+# 
+# Pair with the `cssClass` modifier to attach a stylesheet hook
+# (`Span('def').cssClass('tok-kw')`); the framework class
+# `fai-span` is always present so app CSS has something to scope
+# against without a user class.
+# 
+# ```fai
+# Pre do
+#     Span('def').cssClass('tok-kw')
+#     Span(' add\n')
+#     Span('    @param').cssClass('tok-ann')
+# end
+# ```
+def Span
+    @param text String
+    @return ViewNode
+do
+    let props = set({}, 'text', text)
+    let node = ViewNode(kind: 'Span', key: '', props: props, children: [], events: emptyEvents())
+    registerNode(node)
+    node
+end
+
 # Single-line text input. Bind to a Signal for two-way reactivity, or
 # supply `value` + `onChange` for controlled use. `inputType` maps to
 # the HTML `<input type=...>` attribute — 'text' (default), 'email',
@@ -637,5 +713,48 @@ test SegmentedControl
         assert.equals(getProp(n, 'value'), 'Day')
         assert.equals(childCount(n), 2)
         assert.equals(getChild(n, 0).kind, 'Segment')
+    end
+end
+
+test Pre
+    it 'builds a Pre container collecting children'
+        let tree = Pre do
+            Code do
+                Span('let x = 1')
+            end
+            Code do
+                Span('print(x)')
+            end
+        end
+        assert.equals(tree.kind, 'Pre')
+        assert.equals(childCount(tree), 2)
+        assert.equals(getChild(tree, 0).kind, 'Code')
+        assert.equals(getChild(getChild(tree, 0), 0).kind, 'Span')
+        assert.equals(getProp(getChild(getChild(tree, 0), 0), 'text'), 'let x = 1')
+    end
+end
+
+test Code
+    it 'builds a Code container collecting its inline children'
+        let tree = Code do
+            Span('def')
+                .cssClass('tok-kw')
+            Span(' add')
+        end
+        assert.equals(tree.kind, 'Code')
+        assert.equals(childCount(tree), 2)
+        assert.equals(getChild(tree, 0).kind, 'Span')
+        assert.equals(getProp(getChild(tree, 0), 'text'), 'def')
+        assert.equals(getProp(getChild(tree, 0), 'cssClass'), 'tok-kw')
+        assert.equals(getProp(getChild(tree, 1), 'text'), ' add')
+    end
+end
+
+test Span
+    it 'creates a Span leaf carrying its text'
+        let n = Span('def')
+        assert.equals(n.kind, 'Span')
+        assert.equals(getProp(n, 'text'), 'def')
+        assert.equals(childCount(n), 0)
     end
 end

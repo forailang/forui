@@ -405,6 +405,39 @@ do
     result
 end
 
+# Attach a CSS class to a node in addition to its framework class.
+# The HTML renderer always emits the kind-specific `fai-*` class
+# (e.g. `fai-span` for `Span`); `cssClass` appends the user-supplied
+# name so app stylesheets can hook nodes without inline `style="…"`
+# repetition.
+# 
+# The main use case is syntax-highlighted token streams — pair each
+# `Span` with one of a small palette of class names that app CSS
+# styles:
+# 
+# ```fai
+# Pre do
+#     Span('def').cssClass('tok-kw')
+#     Span(' add')
+#     Span('\n# Add two numbers.').cssClass('tok-cmt')
+# end
+# ```
+# 
+# It also works on any other node kind — `Label('beta').cssClass('badge')`
+# is fine — but resist using it as a general styling escape hatch.
+# Modifiers like `padding` / `foreground` stay the right tool for
+# inline numbers and colors.
+def cssClass
+    @param node ViewNode
+    @param name String
+    @return ViewNode
+do
+    let props = set(node.props, 'cssClass', name)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    replaceLastNode(result)
+    result
+end
+
 test padding
     it 'adds padding to a node'
         let l = Label('hello')
@@ -546,6 +579,22 @@ test withKey
         let n = Label('x')
             .withKey('row-7')
         assert.equals(n.key, 'row-7')
+    end
+end
+
+test cssClass
+    it 'sets the cssClass prop'
+        let n = Span('def')
+            .cssClass('tok-kw')
+        assert.equals(getProp(n, 'cssClass'), 'tok-kw')
+    end
+    it 'preserves the node kind and key'
+        let n = Span('def')
+            .withKey('first-kw')
+            .cssClass('tok-kw')
+        assert.equals(n.kind, 'Span')
+        assert.equals(n.key, 'first-kw')
+        assert.equals(getProp(n, 'cssClass'), 'tok-kw')
     end
 end
 
