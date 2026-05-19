@@ -17,12 +17,15 @@ Status helpers: `isLoading(sig)`, `isLoaded(sig)`, `isError(sig)`.
 Primitives: `Label`, `Paragraph`, `Heading`, `Button`, `TextInput`, `Toggle`,
 `VStack`, `HStack`, `ZStack`, `ScrollView`, `Spacer`, `Divider`, `ImageView`,
 `SegmentedControl`.
-Modifiers (all must be imported): `padding`, `background`, `foreground`,
+Modifiers are ordinary functions and work well through UFCS chaining:
+`padding`, `background`, `foreground`,
 `cornerRadius`, `fontSize`, `fontWeight`, `lineHeight`, `fontStyle`,
 `letterSpacing`, `textAlign`, `fontFamily`, `flex`, `alignItems`,
 `justifyContent`, `flexWrap`, `gap`, `alignSelf`, `display`, `width`,
 `minWidth`, `maxWidth`, `height`, `minHeight`, `position`, `top`, `zIndex`,
 `centered`, `border`, `borderLeft`, `opacity`, `cssClass`, `withKey`.
+They must be in file scope; app UI files usually use `use * from Forui.view`,
+while smaller utility files can import only the symbols they need.
 
 Use `Label` for short UI/control text. Use `Paragraph` for body copy and
 multiline prose. Use `Heading(text, level: n)` for page and section headings;
@@ -36,13 +39,27 @@ stable reconciliation identity in dynamic lists, not for styling hooks.
 `routeParam(name)` extracts URL params. `Router` / `Route` components.
 `Link(path, children)` for navigation links.
 
-## Required imports (per file — no global namespace)
+## Common imports
+
+Imports are per file; there is no global namespace. For app UI files, prefer a
+glob import from `Forui.view` so components and modifiers are both available
+for direct calls and UFCS chains.
 
 ```fai
-use { Label, Button, VStack, fontSize, foreground, padding } from Forui.view
+use * from Forui.view
 use { useSignal, isLoading, isError, setValue, reload } from Forui.signal
 use { navigate, routeParam, Router, Route, Link } from Forui.router
 use { mount } from Forui
+```
+
+```fai
+VStack do
+    Label('Hello')
+        .fontSize(24)
+        .fontWeight('700')
+end
+    .padding(16)
+    .background('#ffffff')
 ```
 
 Run `fai doc Forui.view`, `fai doc Forui.signal`, or `fai doc Forui.router` for

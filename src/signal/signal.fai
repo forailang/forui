@@ -31,7 +31,7 @@ var dirtySignalIds Int[] = []
 var ssrMode = false
 
 # ── Signal Registry (dirty tracking only) ───────────────────────────
-# Enter SSR mode: signal loaders run synchronously instead of via nowait.
+# Enter SSR mode: signal loaders are not started via nowait.
 def enterSsrMode
     @return Void
 do
