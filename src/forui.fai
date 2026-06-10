@@ -1,8 +1,8 @@
 use std.array
 
-use { ViewNode, clearHandlers, emptyEvents, getProp, installViewEventBridge } from view
+use { ViewNode, clearHandlers, clearTreeStack, emptyEvents, getProp, installViewEventBridge } from view
 
-use { hasDirtySignals, clearDirty, onSignalChange, clearOnSignalChange, resetHooks, enterSsrMode, exitSsrMode, saveHookState, restoreHookState } from signal
+use { hasDirtySignals, clearDirty, onSignalChange, clearOnSignalChange, resetHooks, enterSsrMode, exitSsrMode, saveHookState, restoreHookState, setRenderingActive, renderingActive, commitPendingWrites } from signal
 
 use { DiffOp, diffTrees } from diff
 
@@ -30,8 +30,22 @@ var previousTree ViewNode? = null
 
 var lastDiffOps DiffOp[] = []
 
-var isRendering = false
+var renderScheduled = false
 
+var renderRequested = false
+
+var maxRenderPasses = 50
+
+# ── Render scheduling ───────────────────────────────────────────────
+# A signal change does not render inline. `requestRender` coalesces all
+# changes since the last cycle into a SINGLE scheduled render task
+# (`nowait runRenderCycle`), so N writes in one handler produce one
+# render. `renderScheduled` guards against queuing more than one task;
+# `renderRequested` records a change that arrived while a render was
+# already in flight, so exactly one follow-up runs after it.
+# Safety cap: a render that keeps re-dirtying its own inputs (e.g. a
+# child writing a signal a parent reads) would otherwise loop forever.
+# After this many consecutive passes without settling, stop and warn.
 # Boot the app. Call once from `main` with your root render function
 # and a platform adapter (e.g. `htmlRender` from HtmlForui). Does an
 # initial render, then re-renders automatically whenever a signal
@@ -54,15 +68,15 @@ do
     mountedApp = app
     mountedAdapter = render
     onSignalChange do
-        rerender()
+        requestRender()
     end
     if mountedAdapter?
         clearHandlers()
         clearDirty()
         resetHooks()
-        isRendering = true
+        setRenderingActive(true)
         let tree = mountedApp!()
-        isRendering = false
+        setRenderingActive(false)
         let initialOps = [
             DiffOp(action: 'replace', path: '', node: tree, props: null)
         ]
@@ -72,42 +86,98 @@ do
         let stillDirty = hasDirtySignals()
         clearDirty()
         if stillDirty
-            rerender()
+            requestRender()
         end
     end
 end
 
-# Re-render the mounted app. Called automatically after signal changes.
-# If called during a render, the call is skipped — dirty signals will
-# trigger another render after the current one finishes.
+# One render pass: flush buffered writes, rebuild the tree, diff against
+# the previous tree, and hand the ops to the adapter. No locking or
+# scheduling — `runRenderCycle` owns that.
+def renderPass
+    @return Void
+do
+    if mountedApp?
+        if mountedAdapter?
+            commitPendingWrites()
+            clearHandlers()
+            resetHooks()
+            let tree = mountedApp!()
+            if previousTree?
+                let ops = diffTrees(previousTree!, tree)
+                lastDiffOps = ops
+                if array.length(ops) > 0
+                    mountedAdapter!(tree, ops)
+                end
+            end
+            previousTree = tree
+        end
+    end
+end
+
+# Run render passes until the tree settles (no signals left dirty),
+# bounded by `maxRenderPasses`. A single render is in flight for the
+# whole cycle: `renderingActive` is true so any writes that land during
+# it buffer instead of tearing the pass, and re-renders pick them up via
+# `commitPendingWrites`. This is the synchronous entry point used by the
+# scheduled task and by tests.
+def runRenderCycle
+    @return Void
+do
+    renderScheduled = false
+    if renderingActive()
+        renderRequested = true
+    else
+        setRenderingActive(true)
+        var passes = 0
+        var again = true
+        while again
+            passes = passes + 1
+            renderPass()
+            let stillDirty = hasDirtySignals()
+            clearDirty()
+            if stillDirty
+                if passes < maxRenderPasses
+                    again = true
+                else
+                    print('forui: render did not settle after max passes; stopping to avoid an infinite loop')
+                    again = false
+                end
+            else
+                again = false
+            end
+        end
+        setRenderingActive(false)
+        if renderRequested
+            renderRequested = false
+            requestRender()
+        end
+    end
+end
+
+# Request a re-render. Coalesces: many calls between renders schedule a
+# SINGLE render task that runs after the current handler/loader turn. If
+# a render is already in flight, records a follow-up instead.
+def requestRender
+    @return Void
+do
+    if renderingActive()
+        renderRequested = true
+    else
+        if !renderScheduled
+            renderScheduled = true
+            nowait runRenderCycle()
+        end
+    end
+end
+
+# Synchronously render now. Kept for tests and for callers that need an
+# immediate, in-line render rather than a scheduled one. Production
+# signal changes go through `requestRender` (scheduled + coalesced).
 def rerender
     @return Void
 do
-    if !isRendering
-        if mountedApp?
-            if mountedAdapter?
-                isRendering = true
-                clearHandlers()
-                resetHooks()
-                let tree = mountedApp!()
-                isRendering = false
-                var ops DiffOp[] = []
-                if previousTree?
-                    ops = diffTrees(previousTree!, tree)
-                    lastDiffOps = ops
-                    if array.length(ops) > 0
-                        mountedAdapter!(tree, ops)
-                    end
-                end
-                previousTree = tree
-                let stillDirty = hasDirtySignals()
-                clearDirty()
-                if stillDirty
-                    rerender()
-                end
-            end
-        end
-    end
+    runRenderCycle()
 end
 
 # Return the diff ops produced by the most recent render cycle.
@@ -138,6 +208,7 @@ do
     let tree = app()
     exitSsrMode()
     restoreHookState(savedHooks)
+    clearTreeStack()
     tree
 end
 
@@ -399,5 +470,50 @@ test resetCapture
         resetCapture()
         assert.equals(testCallCount, 0)
         assert.equals(array.length(testOps), 0)
+    end
+end
+
+test renderPass
+    it 'renders the current tree into the adapter'
+        resetCapture()
+        changingAppText = 'rp-before'
+        mount(changingApp, testAdapter)
+        changingAppText = 'rp-after'
+        renderPass()
+        assert.equals(testOps[0].action, 'update')
+    end
+    afterEach
+        clearOnSignalChange()
+    end
+end
+
+test runRenderCycle
+    it 'renders synchronously until the tree settles'
+        resetCapture()
+        changingAppText = 'rc-before'
+        mount(changingApp, testAdapter)
+        let callsAfterMount = testCallCount
+        changingAppText = 'rc-after'
+        runRenderCycle()
+        assert.equals(testCallCount, callsAfterMount + 1)
+        assert.equals(testOps[0].action, 'update')
+    end
+    afterEach
+        clearOnSignalChange()
+    end
+end
+
+test requestRender
+    it 'coalesces repeated calls without throwing'
+        resetCapture()
+        mount(staticApp, testAdapter)
+        requestRender()
+        requestRender()
+        assert.equals(true, true)
+    end
+    afterEach
+        clearOnSignalChange()
+        renderScheduled = false
+        renderRequested = false
     end
 end

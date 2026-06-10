@@ -71,7 +71,7 @@ do
                 s.status = SignalStatus.loading
             else
                 s.status = SignalStatus.loading
-                nowait doLoad(s, loader!)
+                nowait doLoad(s.id, loader!)
             end
         end
         s
@@ -95,7 +95,7 @@ do
     if signal.status == SignalStatus.initial
         signal.status = SignalStatus.loading
         if !ssrMode
-            nowait doLoad(signal, loader)
+            nowait doLoad(signal.id, loader)
         end
     end
 end
@@ -117,28 +117,24 @@ def reload
 do
     if signal.loader != null
         signal.status = SignalStatus.loading
-        nowait doLoad(signal, signal.loader!)
+        nowait doLoad(signal.id, signal.loader!)
     end
 end
 
-# Internal: execute the loader and update the signal.
+# Internal: execute the loader and update the signal. Takes the signal *id*
+# (not a `mutable` signal) so it can be forked with `nowait` — it looks the
+# shared signal up by id into a local `var` and mutates that.
 def doLoad
-    @param signal Signal, mutable
+    @param id Int
     @param loader Loader
     @return Void
 do
+    var signal = signalById(id)
     try
         let data = loader()
-        signal.value = data
-        signal.status = SignalStatus.loaded
-        signal.error = null
-        markDirty(signal.id)
-        notifyChange()
+        setLoaded(signal, data)
     catch e
-        signal.status = SignalStatus.error
-        signal.error = e.message
-        markDirty(signal.id)
-        notifyChange()
+        setError(signal, e.message)
     end
 end
 
@@ -251,7 +247,7 @@ test doLoad
     it 'invokes the loader immediately'
         var s = createSignal(0)
         var ran = false
-        doLoad(s) do
+        doLoad(s.id) do
             ran = true
         end
         assert.equals(ran, true)

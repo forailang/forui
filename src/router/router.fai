@@ -6,7 +6,7 @@ use std.convert
 
 use { ViewNode, emptyEvents, registerNode, pushFrame, popFrame, attachClickHandler, Children, Label } from view
 
-use { Signal, createSignal, setValue, clearHookSignals } from signal
+use { Signal, createSignal, setValue, value, clearHookSignals } from signal
 
 # ── Route types ────────────────────────────────────────────────────
 # A function that renders the UI subtree for a matched route.
@@ -120,7 +120,7 @@ def currentPath
     @return String
 do
     ensureRouter()
-    toString(routerPathSignal.value)
+    toString(routerPathSignal.value())
 end
 
 # Read a `:name` placeholder from the currently matched route. Returns

@@ -132,6 +132,26 @@ do
     treeStack = array.append(treeStack, node)
 end
 
+# Reset the tree-building context to empty. A full render leaves the root node
+# registered in `treeStack` (nothing pops the outermost frame), so the global
+# would keep a reference to the whole rendered tree — leaking it every render.
+# `renderSSR` calls this once it has taken the tree, leaving the returned value
+# as the only owner so releasing it fully reclaims the tree.
+def clearTreeStack
+    @return Void
+do
+    treeStack = []
+    frameStarts = []
+end
+
+test clearTreeStack
+    it 'empties the tree-building context'
+        registerNode(testNode('Label'))
+        clearTreeStack()
+        assert.equals(length(treeStack), 0)
+    end
+end
+
 # Replace the last registered node (used by modifiers to update in-place).
 def replaceLastNode
     @param node ViewNode

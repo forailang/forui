@@ -2,7 +2,7 @@ use std.array
 
 use std.events
 
-use { Signal, setValue } from signal
+use { Signal, setValue, value } from signal
 
 # ── Container primitives ────────────────────────────────────────────
 # Top-level application window. Exactly one should wrap the app root.
@@ -251,13 +251,13 @@ end
 # ```fai
 # var draft = useSignal('')
 # TextInput('What needs done?', signalValue: draft, onSubmit: do
-#     addTask(draft.value)
+#     addTask(draft.value())
 #     draft.setValue('')
 # end)
 # ```
 def TextInput
     @param placeholder String
-    @param value String?, default: null
+    @param text String?, default: null
     @param signalValue Signal?, default: null
     @param onChange ChangeAction?, default: null
     @param onSubmit ClickAction?, default: null
@@ -271,14 +271,14 @@ do
         props = set(props, 'inputType', 'text')
     end
     if signalValue != null
-        props = set(props, 'value', signalValue!.value)
+        props = set(props, 'value', signalValue!.value())
         let changeId = registerChangeHandler do with newValue String
             signalValue!.setValue(newValue)
         end
         props = set(props, 'changeHandlerId', changeId)
     else
-        if value != null
-            props = set(props, 'value', value!)
+        if text != null
+            props = set(props, 'value', text!)
         end
         if onChange != null
             let changeId = registerChangeHandler(onChange!)
@@ -367,7 +367,7 @@ def Toggle
 do
     var onValue = false
     if signalValue != null
-        onValue = signalValue!.value
+        onValue = signalValue!.value()
     else
         if isOn != null
             onValue = isOn!
@@ -435,7 +435,7 @@ def SegmentedControl
 do
     var currentValue = ''
     if signalValue != null
-        currentValue = toString(signalValue!.value)
+        currentValue = toString(signalValue!.value())
     else
         if selected != null
             currentValue = selected!

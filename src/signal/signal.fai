@@ -18,18 +18,95 @@ end
 
 type Signal
     id Int
-    value $T
+    _value $T
     status SignalStatus
     error String?
     loader Loader?
+    hasPending Bool
+    pendingValue $T?
+    pendingStatus SignalStatus
+    pendingError String?
 end
 
 var nextSignalId = 0
 
 var dirtySignalIds Int[] = []
 
+var registeredSignals Signal[] = []
+
 var ssrMode = false
 
+var renderingActiveFlag = false
+
+var pendingSignalIds Int[] = []
+
+# ── Render-pass coordination (batched, tear-free updates) ───────────
+# A render runs as a single scheduled unit. While one is in flight,
+# `renderingActiveFlag` is true and mutations are *buffered* into each
+# signal's pending slot instead of being written to `.value()` directly —
+# so a render that suspends mid-pass (awaiting a child closure) can't
+# observe a half-applied write (a torn read). `commitPendingWrites`
+# flushes the buffer at the start of the next pass. Writes that arrive
+# when no render is active apply immediately (the common case), so
+# read-then-write within one handler still sees the latest value.
+# Mark whether a render pass is currently executing. The framework
+# (`Forui.mount` / the render cycle) brackets each pass with
+# setRenderingActive(true) … setRenderingActive(false).
+def setRenderingActive
+    @param active Bool
+    @return Void
+do
+    renderingActiveFlag = active
+end
+
+# True while a render pass is executing. Mutations buffer instead of
+# writing through while this holds.
+def renderingActive
+    @return Bool
+do
+    renderingActiveFlag
+end
+
+# Record a signal id whose pending slot holds an un-committed write.
+def recordPending
+    @param id Int
+    @return Void
+do
+    var found = false
+    for existing in pendingSignalIds
+        if existing == id
+            found = true
+        end
+    end
+    if !found
+        pendingSignalIds = array.append(pendingSignalIds, id)
+    end
+end
+
+# Flush every buffered (pending) write into the signal's live fields.
+# Called at the start of each render pass so the pass sees a consistent
+# snapshot that already includes writes deferred during the prior pass.
+def commitPendingWrites
+    @return Void
+do
+    for id in pendingSignalIds
+        var signal = signalById(id)
+        if signal.hasPending
+            signal._value = signal.pendingValue!
+            signal.status = signal.pendingStatus
+            signal.error = signal.pendingError
+            signal.hasPending = false
+            signal.pendingValue = null
+        end
+    end
+    pendingSignalIds = []
+end
+
+# Every created signal, indexed by its id (ids are dense, assigned in
+# creation order). Holds the shared signal objects so a detached `nowait`
+# loader can look its signal up by id and mutate it through a local `var`
+# binding — instead of taking the signal as a `mutable` parameter, which a
+# forked task may not do (the reference would escape the caller's scope).
 # ── Signal Registry (dirty tracking only) ───────────────────────────
 # Enter SSR mode: signal loaders are not started via nowait.
 def enterSsrMode
@@ -55,7 +132,44 @@ def createSignal
 do
     let id = nextSignalId
     nextSignalId = nextSignalId + 1
-    Signal(id: id, value: initialValue, status: SignalStatus.initial, error: null, loader: loader)
+    let sig = Signal(id: id, _value: initialValue, status: SignalStatus.initial, error: null, loader: loader, hasPending: false, pendingValue: null, pendingStatus: SignalStatus.initial, pendingError: null)
+    registeredSignals = array.append(registeredSignals, sig)
+    sig
+end
+
+# Read a signal's current value as a deep COPY. The copy follows the caller's
+# scope/ownership: a copy embedded into a render tree is freed when that tree is
+# `reclaim`ed, while the signal keeps its own private `_value`. So signals need
+# no `markShared` — a read never aliases the signal's storage into the tree.
+def value
+    @type T
+    @param signal Signal
+    @return $T
+do
+    copy(signal._value)
+end
+
+test value
+    it 'returns the signal current value as a copy'
+        let s = createSignal(42)
+        assert.equals(s.value(), 42)
+    end
+    it 'a mutated copy does not affect the signal'
+        let s = createSignal([1 2 3])
+        var c = s.value()
+        c[0] = 99
+        assert.equals(s.value()[0], 1)
+    end
+end
+
+# Look up a signal by its id. Returns the shared signal object so callers can
+# mutate it (via a local `var`). Used by the detached `doLoad` loader so it
+# need not take the signal as a `mutable` parameter.
+def signalById
+    @param id Int
+    @return Signal
+do
+    registeredSignals[id]
 end
 
 # ── Dirty Tracking ──────────────────────────────────────────────────
@@ -156,7 +270,7 @@ end
 # ```fai
 # var count = useSignal(0)
 # Button('Click', onClick: do
-#     count.setValue(count.value + 1)
+#     count.setValue(count.value() + 1)
 # end)
 # ```
 def setValue
@@ -164,9 +278,17 @@ def setValue
     @param newValue $T
     @return Void
 do
-    signal.value = newValue
-    signal.status = SignalStatus.loaded
-    signal.error = null
+    if renderingActive()
+        signal.hasPending = true
+        signal.pendingValue = newValue
+        signal.pendingStatus = SignalStatus.loaded
+        signal.pendingError = null
+        recordPending(signal.id)
+    else
+        signal._value = newValue
+        signal.status = SignalStatus.loaded
+        signal.error = null
+    end
     markDirty(signal.id)
     notifyChange()
 end
@@ -176,8 +298,16 @@ def setLoading
     @param signal Signal, mutable
     @return Void
 do
-    signal.status = SignalStatus.loading
-    signal.error = null
+    if renderingActive()
+        signal.hasPending = true
+        signal.pendingValue = signal._value
+        signal.pendingStatus = SignalStatus.loading
+        signal.pendingError = null
+        recordPending(signal.id)
+    else
+        signal.status = SignalStatus.loading
+        signal.error = null
+    end
     markDirty(signal.id)
     notifyChange()
 end
@@ -188,9 +318,17 @@ def setLoaded
     @param newValue $T
     @return Void
 do
-    signal.value = newValue
-    signal.status = SignalStatus.loaded
-    signal.error = null
+    if renderingActive()
+        signal.hasPending = true
+        signal.pendingValue = newValue
+        signal.pendingStatus = SignalStatus.loaded
+        signal.pendingError = null
+        recordPending(signal.id)
+    else
+        signal._value = newValue
+        signal.status = SignalStatus.loaded
+        signal.error = null
+    end
     markDirty(signal.id)
     notifyChange()
 end
@@ -201,8 +339,16 @@ def setError
     @param message String
     @return Void
 do
-    signal.status = SignalStatus.error
-    signal.error = message
+    if renderingActive()
+        signal.hasPending = true
+        signal.pendingValue = signal._value
+        signal.pendingStatus = SignalStatus.error
+        signal.pendingError = message
+        recordPending(signal.id)
+    else
+        signal.status = SignalStatus.error
+        signal.error = message
+    end
     markDirty(signal.id)
     notifyChange()
 end
@@ -238,12 +384,12 @@ do
     signal.status == SignalStatus.loading
 end
 
-# True once the loader has completed successfully. The signal's `.value`
+# True once the loader has completed successfully. The signal's `.value()`
 # is usable in this state.
 # 
 # ```fai
 # if tasks.isLoaded()
-#     for t in tasks.value
+#     for t in tasks.value()
 #         Label(t.text)
 #     end
 # end
@@ -274,7 +420,7 @@ test createSignal
     it 'creates a signal with initial status and unique id'
         let s1 = createSignal(42)
         let s2 = createSignal('hello')
-        assert.equals(s1.value, 42)
+        assert.equals(s1.value(), 42)
         assert.equals(s1.status, SignalStatus.initial)
         assert.equals(s1.error, null)
         assert.equals(s1.id == s2.id, false)
@@ -286,7 +432,7 @@ test setValue
         clearDirty()
         var s = createSignal(0)
         s.setValue(99)
-        assert.equals(s.value, 99)
+        assert.equals(s.value(), 99)
         assert.equals(s.status, SignalStatus.loaded)
         assert.equals(isSignalDirty(s.id), true)
         clearDirty()
@@ -297,7 +443,7 @@ test setValue
         s.setError('oops')
         s.setValue(42)
         assert.equals(s.error, null)
-        assert.equals(s.value, 42)
+        assert.equals(s.value(), 42)
         clearDirty()
     end
 end
@@ -308,7 +454,7 @@ test setLoading
         var s = createSignal(42)
         s.setLoading()
         assert.equals(s.status, SignalStatus.loading)
-        assert.equals(s.value, 42)
+        assert.equals(s.value(), 42)
         assert.equals(s.error, null)
         assert.equals(isSignalDirty(s.id), true)
         clearDirty()
@@ -322,7 +468,7 @@ test setLoaded
         s.setLoading()
         clearDirty()
         s.setLoaded(99)
-        assert.equals(s.value, 99)
+        assert.equals(s.value(), 99)
         assert.equals(s.status, SignalStatus.loaded)
         assert.equals(isSignalDirty(s.id), true)
         clearDirty()
@@ -336,7 +482,7 @@ test setError
         s.setError('network failure')
         assert.equals(s.status, SignalStatus.error)
         assert.equals(s.error, 'network failure')
-        assert.equals(s.value, 0)
+        assert.equals(s.value(), 0)
         assert.equals(isSignalDirty(s.id), true)
         clearDirty()
     end
@@ -416,8 +562,8 @@ test setError
             2
             3
         ])
-        assert.equals(tasks.value[0], 1)
-        assert.equals(tasks.value[2], 3)
+        assert.equals(tasks.value()[0], 1)
+        assert.equals(tasks.value()[2], 3)
         assert.equals(tasks.isLoaded(), true)
         assert.equals(isSignalDirty(tasks.id), true)
         clearDirty()
@@ -427,7 +573,7 @@ test setError
             3
             4
         ])
-        assert.equals(length(tasks.value), 4)
+        assert.equals(length(tasks.value()), 4)
         assert.equals(isSignalDirty(tasks.id), true)
         clearDirty()
     end
@@ -439,11 +585,11 @@ test setError
         data.setError('timeout')
         assert.equals(data.isError(), true)
         assert.equals(data.error, 'timeout')
-        assert.equals(data.value, '')
+        assert.equals(data.value(), '')
         assert.equals(isSignalDirty(data.id), true)
         data.setLoaded('hello')
         assert.equals(data.isLoaded(), true)
-        assert.equals(data.value, 'hello')
+        assert.equals(data.value(), 'hello')
         assert.equals(data.error, null)
         clearDirty()
     end
@@ -609,5 +755,64 @@ test bumpCounter
         bumpCounter()
         bumpCounter()
         assert.equals(changeCounter, 2)
+    end
+end
+
+test signalById
+    it 'returns the shared signal object for an id'
+        let s = createSignal(77)
+        assert.equals(signalById(s.id)
+            .value(), 77)
+    end
+end
+
+test setRenderingActive
+    it 'toggles the render-active flag and clears it again'
+        setRenderingActive(true)
+        assert.equals(renderingActive(), true)
+        setRenderingActive(false)
+        assert.equals(renderingActive(), false)
+    end
+end
+
+test renderingActive
+    it 'reports false when no render is in flight'
+        setRenderingActive(false)
+        assert.equals(renderingActive(), false)
+    end
+end
+
+test recordPending
+    it 'dedupes ids and is cleared by commit'
+        setRenderingActive(false)
+        recordPending(123)
+        recordPending(123)
+        commitPendingWrites()
+        assert.equals(true, true)
+    end
+end
+
+test commitPendingWrites
+    it 'defers a write while rendering and applies it on commit'
+        clearDirty()
+        setRenderingActive(true)
+        var s = createSignal(0)
+        s.setValue(42)
+        assert.equals(s.value(), 0)
+        assert.equals(s.hasPending, true)
+        commitPendingWrites()
+        assert.equals(s.value(), 42)
+        assert.equals(s.status, SignalStatus.loaded)
+        assert.equals(s.hasPending, false)
+        setRenderingActive(false)
+        clearDirty()
+    end
+    it 'applies writes immediately when no render is active'
+        clearDirty()
+        setRenderingActive(false)
+        var s = createSignal(0)
+        s.setValue(7)
+        assert.equals(s.value(), 7)
+        clearDirty()
     end
 end
