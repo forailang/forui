@@ -6,7 +6,7 @@ use { Signal, setValue, value } from signal
 
 # ── Container primitives ────────────────────────────────────────────
 # Top-level application window. Exactly one should wrap the app root.
-# 
+#
 # ```fai
 # Window('My App') do
 #     VStack do
@@ -25,7 +25,7 @@ end
 
 # Generic div-like container. Use when you want a grouping node without
 # VStack/HStack layout behaviour.
-# 
+#
 # ```fai
 # View do
 #     Label('Grouped content')
@@ -40,7 +40,7 @@ end
 
 # Horizontal stack — lays children out left-to-right. Add `Spacer()` to
 # push siblings apart.
-# 
+#
 # ```fai
 # HStack do
 #     Label('Left')
@@ -57,7 +57,7 @@ end
 
 # Vertical stack — lays children out top-to-bottom. The workhorse
 # container for most forui layouts.
-# 
+#
 # ```fai
 # VStack do
 #     Label('Title').fontSize(24)
@@ -73,7 +73,7 @@ end
 
 # Z-stack — stacks children on the z-axis (later children render on top).
 # Use for badges, overlays, tooltips.
-# 
+#
 # ```fai
 # ZStack do
 #     ImageView(src: '/hero.png')
@@ -89,7 +89,7 @@ end
 
 # Scrollable container. Wraps a tall VStack or list when the content
 # may exceed the viewport.
-# 
+#
 # ```fai
 # ScrollView do
 #     VStack do
@@ -112,7 +112,7 @@ end
 # `Paragraph`; for page or section titles use `Heading`.
 # Apply modifiers via UFCS: `.fontSize()`, `.foreground()`,
 # `.fontWeight()`, `.padding()`, etc.
-# 
+#
 # ```fai
 # Label('Welcome').fontSize(24).fontWeight('700').foreground('#17202a')
 # ```
@@ -130,7 +130,7 @@ end
 # helper text, and multiline content that should occupy the available
 # column width. The HTML renderer emits a semantic `<p>` with the
 # `fai-paragraph` class.
-# 
+#
 # ```fai
 # Paragraph('Tests are required and run with every build.')
 #     .lineHeight('1.65')
@@ -150,7 +150,7 @@ end
 # `level` maps to HTML h1-h6 when rendering to HTML and defaults to 3
 # for reusable section headings. Invalid HTML levels fall back to h3 in
 # the HTML renderer.
-# 
+#
 # ```fai
 # Heading('Forai', level: 1)
 # Heading('Project Workflow')
@@ -171,7 +171,7 @@ end
 # the web — children appear with their literal whitespace preserved.
 # Pair with `Code` for syntax-style code blocks; pair with `Label` for
 # any other text whose layout should be byte-for-byte faithful.
-# 
+#
 # ```fai
 # Pre do
 #     Code do
@@ -189,12 +189,12 @@ end
 # Inline `<code>` container. Holds text via `Label` / `Span`
 # children — the latter pairs naturally with the `cssClass`
 # modifier for syntax-highlighted token streams.
-# 
+#
 # Most useful inside `Pre` for code blocks (the canonical
 # `<pre><code>…</code></pre>` markup), but also fine inline in
 # prose when a snippet should carry code semantics for
 # screenreaders and copy-paste tools.
-# 
+#
 # ```fai
 # Pre do
 #     Code do
@@ -202,7 +202,7 @@ end
 #         Span(' add')
 #     end
 # end
-# 
+#
 # Label('To install run ')
 # Code do
 #     Label('curl -fsSL ...')
@@ -220,12 +220,12 @@ end
 # styled pieces — chiefly for syntax-highlighted token streams
 # inside a `Pre` / `Code` block, but also fine for tagging a word
 # inside prose.
-# 
+#
 # Pair with the `cssClass` modifier to attach a stylesheet hook
 # (`Span('def').cssClass('tok-kw')`); the framework class
 # `fai-span` is always present so app CSS has something to scope
 # against without a user class.
-# 
+#
 # ```fai
 # Pre do
 #     Span('def').cssClass('tok-kw')
@@ -247,7 +247,7 @@ end
 # supply `value` + `onChange` for controlled use. `inputType` maps to
 # the HTML `<input type=...>` attribute — 'text' (default), 'email',
 # 'password'. `onSubmit` fires on Enter.
-# 
+#
 # ```fai
 # var draft = useSignal('')
 # TextInput('What needs done?', signalValue: draft, onSubmit: do
@@ -295,7 +295,7 @@ do
 end
 
 # Clickable button. `onClick` is a `do ... end` closure with no args.
-# 
+#
 # ```fai
 # Button('Save', onClick: do
 #     saveRecord()
@@ -319,7 +319,7 @@ end
 
 # Flexible spacer — fills available space between siblings in an HStack
 # or VStack. Push one sibling to each edge by dropping a Spacer between.
-# 
+#
 # ```fai
 # HStack do
 #     Label('Left')
@@ -337,7 +337,7 @@ end
 
 # Image element. `src` is a URL or asset path — the platform adapter
 # handles loading.
-# 
+#
 # ```fai
 # ImageView(src: '/static/logo.png').cornerRadius(8)
 # ```
@@ -354,7 +354,7 @@ end
 # Binary on/off switch — iOS-style visually, `<button role="switch">`
 # in HTML. Either bind to a Signal (auto-flips on click) or supply an
 # `isOn` + `onChange` pair for controlled use.
-# 
+#
 # ```fai
 # var notifications = useSignal(true)
 # Toggle(signalValue: notifications)
@@ -397,7 +397,7 @@ end
 
 # Horizontal rule (thin line separator). No props — add colour or
 # spacing with standard modifiers.
-# 
+#
 # ```fai
 # VStack do
 #     Label('Section A')
@@ -416,12 +416,12 @@ end
 # iOS-style row of mutually-exclusive options — the selected segment
 # is highlighted. `options` are labels (both display text and selection
 # identity; must be unique).
-# 
+#
 # Binding modes:
 # - `signalValue`: the signal's String value is the current segment;
 # clicking writes the chosen label back.
 # - `selected` + `onChange`: controlled mode.
-# 
+#
 # ```fai
 # var view = useSignal('All')
 # SegmentedControl(['All', 'Active', 'Done'], signalValue: view)

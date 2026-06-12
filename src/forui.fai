@@ -50,7 +50,7 @@ var maxRenderPasses = 50
 # and a platform adapter (e.g. `htmlRender` from HtmlForui). Does an
 # initial render, then re-renders automatically whenever a signal
 # changes.
-# 
+#
 # ```fai
 # def main
 #     @return Void
@@ -82,10 +82,14 @@ do
         ]
         lastDiffOps = initialOps
         mountedAdapter!(tree, initialOps)
-        previousTree = tree
+        previousTree = copy(tree)
         let stillDirty = hasDirtySignals()
         clearDirty()
         if stillDirty
+            requestRender()
+        end
+        if renderRequested
+            renderRequested = false
             requestRender()
         end
     end
@@ -110,7 +114,7 @@ do
                     mountedAdapter!(tree, ops)
                 end
             end
-            previousTree = tree
+            previousTree = copy(tree)
         end
     end
 end
@@ -217,7 +221,7 @@ end
 # needed. Pair with `childCount`, `getChild`, `getProp`, `findByKind`,
 # `findByProp` (from `Forui.view`) to write assertions. Equivalent to
 # `renderSSR(app, '/')` with hook isolation.
-# 
+#
 # ```fai
 # test MyPage
 # it 'renders a header'
@@ -237,7 +241,7 @@ end
 
 # Like `testMount`, but with a specific route path. Use this to test
 # router-aware pages that read `routeParam` or switch on the URL.
-# 
+#
 # ```fai
 # let tree = testMountAt(App, '/teams/42/details')
 # assert.equals(tree.kind, 'Window')
@@ -296,6 +300,14 @@ do
     testForuiLabel(changingAppText)
 end
 
+# Render function that requests a render during mount.
+def requestingApp
+    @return ViewNode
+do
+    requestRender()
+    testForuiLabel('requesting')
+end
+
 var testOps DiffOp[] = []
 
 var testCallCount = 0
@@ -341,8 +353,18 @@ test mount
         mount(staticApp, testAdapter)
         assert.equals(testOps[0].node!.kind, 'Label')
     end
+    it 'flushes render requests captured during initial mount'
+        resetCapture()
+        renderScheduled = false
+        renderRequested = false
+        mount(requestingApp, testAdapter)
+        assert.equals(renderRequested, false)
+        assert.equals(renderScheduled, true)
+    end
     afterEach
         clearOnSignalChange()
+        renderScheduled = false
+        renderRequested = false
     end
 end
 
@@ -443,6 +465,17 @@ test changingApp
         assert.equals(getProp(changingApp(), 'text')!, 'first')
         changingAppText = 'second'
         assert.equals(getProp(changingApp(), 'text')!, 'second')
+    end
+end
+
+test requestingApp
+    it 'returns a label node'
+        renderScheduled = false
+        renderRequested = false
+        let node = requestingApp()
+        assert.equals(node.kind, 'Label')
+        renderScheduled = false
+        renderRequested = false
     end
 end
 

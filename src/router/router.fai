@@ -88,7 +88,7 @@ end
 # Programmatically change routes — typically from a Button's onClick.
 # Updates the reactive path signal so the next render shows the new
 # page.
-# 
+#
 # ```fai
 # Button('Open details', onClick: do
 #     navigate('/teams/' + team.id)
@@ -125,7 +125,7 @@ end
 
 # Read a `:name` placeholder from the currently matched route. Returns
 # `null` if the param isn't present — unwrap with a fallback for safety.
-# 
+#
 # ```fai
 # # Route: '/teams/:teamId'
 # let teamId = unwrap(routeParam('teamId'), '')
@@ -269,7 +269,7 @@ end
 # Client-side router. Collects child `Route` definitions and renders
 # the first one whose pattern matches the current path. Wrap this near
 # the top of your app, usually inside Window.
-# 
+#
 # ```fai
 # Router do
 #     Route('/') do
@@ -331,7 +331,7 @@ end
 # Declarative navigation link — renders as an `<a>` on web so
 # right-click, cmd-click, and screen readers work correctly. Regular
 # clicks are intercepted and routed via `navigate()`.
-# 
+#
 # ```fai
 # Link('/teams') do
 #     Label('Teams').foreground('#194b8f').fontWeight('700')

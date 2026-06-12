@@ -126,7 +126,7 @@ end
 # Attach a click handler as a UFCS modifier. Most leaf components (Button,
 # Toggle) take `onClick:` directly — use this when you want to make a
 # container or Label clickable.
-# 
+#
 # ```fai
 # Label('Click me').padding(8).onClick do
 #     navigate('/details')
@@ -142,7 +142,7 @@ end
 
 # Attach a change handler as a UFCS modifier. The handler receives the
 # new value as a String.
-# 
+#
 # ```fai
 # TextInput('Search').onChange do with query String
 #     runSearch(query)

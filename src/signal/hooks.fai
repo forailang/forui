@@ -43,14 +43,14 @@ end
 # first render only. Pass an optional trailing `do ... end` loader
 # closure to fetch async data — the signal auto-loads on first render
 # and can be refreshed later with `reload()`.
-# 
+#
 # Always declare with `var`; mutating helpers (`setValue`, `reload`,
 # `setError`) require a mutable binding.
-# 
+#
 # ```fai
 # # Simple local state.
 # var count = useSignal(0)
-# 
+#
 # # Async loader — the signal goes through loading → loaded/error.
 # var tasks = useSignal([]) do
 #     getTasks()
@@ -102,7 +102,7 @@ end
 
 # Re-run a signal's loader closure. Useful for refresh buttons or after
 # a mutation that should update the fetched data.
-# 
+#
 # ```fai
 # var tasks = useSignal([]) do
 #     getTasks()

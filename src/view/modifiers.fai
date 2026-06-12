@@ -2,14 +2,14 @@ use std.array
 
 # ── Modifiers (UFCS-friendly) ───────────────────────────────────────
 # Add inner padding around a node's content. Pixels.
-# 
+#
 # - `padding(n)` — all four sides equal to `n`.
 # - `padding(v, h)` — vertical (top/bottom) and horizontal (left/right).
 # - `padding(t, r, b, l)` — explicit CSS shorthand order.
-# 
+#
 # Unset positional args default to `-1`; any side that comes through as
 # `-1` is treated as "not provided" and falls back to the shorter form.
-# 
+#
 # ```fai
 # VStack do
 #     Label('content')
@@ -45,7 +45,7 @@ do
 end
 
 # Set top-side padding only (pixels). Other sides are unaffected.
-# 
+#
 # ```fai
 # Label('row').paddingTop(8)
 # ```
@@ -61,7 +61,7 @@ do
 end
 
 # Set bottom-side padding only (pixels). Other sides are unaffected.
-# 
+#
 # ```fai
 # Label('row').paddingBottom(8)
 # ```
@@ -77,7 +77,7 @@ do
 end
 
 # Set left-side padding only (pixels). Other sides are unaffected.
-# 
+#
 # ```fai
 # Label('row').paddingLeft(12)
 # ```
@@ -93,7 +93,7 @@ do
 end
 
 # Set right-side padding only (pixels). Other sides are unaffected.
-# 
+#
 # ```fai
 # Label('row').paddingRight(12)
 # ```
@@ -109,11 +109,11 @@ do
 end
 
 # Add outer margin around a node. Pixels. Mirrors `padding`.
-# 
+#
 # - `margin(n)` — all four sides equal to `n`.
 # - `margin(v, h)` — vertical (top/bottom) and horizontal (left/right).
 # - `margin(t, r, b, l)` — explicit CSS shorthand order.
-# 
+#
 # ```fai
 # Label('hero').margin(24)
 # Label('cell').margin(4, 8)
@@ -147,7 +147,7 @@ do
 end
 
 # Set top-side margin only (pixels). Other sides are unaffected.
-# 
+#
 # ```fai
 # Label('row').marginTop(8)
 # ```
@@ -163,7 +163,7 @@ do
 end
 
 # Set bottom-side margin only (pixels). Other sides are unaffected.
-# 
+#
 # ```fai
 # Label('row').marginBottom(8)
 # ```
@@ -179,7 +179,7 @@ do
 end
 
 # Set left-side margin only (pixels). Other sides are unaffected.
-# 
+#
 # ```fai
 # Label('row').marginLeft(12)
 # ```
@@ -195,7 +195,7 @@ do
 end
 
 # Set right-side margin only (pixels). Other sides are unaffected.
-# 
+#
 # ```fai
 # Label('row').marginRight(12)
 # ```
@@ -211,7 +211,7 @@ do
 end
 
 # Set the background colour (hex string, named colour, or rgba).
-# 
+#
 # ```fai
 # Label('Card').padding(12).background('#ffffff').cornerRadius(8)
 # ```
@@ -227,7 +227,7 @@ do
 end
 
 # Set the foreground (text) colour.
-# 
+#
 # ```fai
 # Label('Error').foreground('#b3261e')
 # ```
@@ -243,7 +243,7 @@ do
 end
 
 # Round corners. `radius` is in pixels.
-# 
+#
 # ```fai
 # ImageView(src: '/avatar.png').cornerRadius(24)
 # ```
@@ -262,7 +262,7 @@ end
 # is any CSS colour string (hex, named, rgba). For per-side borders
 # we'll add `borderTop` / `borderRight` / etc. when there's a real
 # need.
-# 
+#
 # ```fai
 # Label('Card').padding(12).border(1, '#e0e6ec').cornerRadius(8)
 # ```
@@ -294,7 +294,7 @@ do
 end
 
 # Set the font size in points on a ViewNode. Chainable via UFCS.
-# 
+#
 # ```fai
 # Label('Title').fontSize(24)
 # ```
@@ -311,7 +311,7 @@ end
 
 # Set the font weight. Use numeric strings like '400', '600', '700' or
 # named weights ('bold') depending on the platform adapter.
-# 
+#
 # ```fai
 # Label('Important').fontWeight('700')
 # ```
@@ -328,7 +328,7 @@ end
 
 # Set the CSS `flex` shorthand. Useful for fixing width/height on a
 # child inside an HStack/VStack.
-# 
+#
 # ```fai
 # Label('Fixed-width column').flex('0 0 150px')
 # ```
@@ -421,7 +421,7 @@ end
 # Set the CSS `width`. Accepts any valid CSS length — `'100%'`,
 # `'480px'`, `'50vw'`, etc. Usually paired with `maxWidth` for a
 # fluid-but-capped page container.
-# 
+#
 # ```fai
 # VStack do
 #     ...
@@ -477,7 +477,7 @@ end
 # Set the CSS `max-width`. Accepts any valid CSS length. Typical use
 # is a responsive page shell: `width('100%').maxWidth('1100px')` fills
 # the viewport on phones but caps on wide desktops.
-# 
+#
 # ```fai
 # Section('Teams') do
 #     ...
@@ -543,7 +543,7 @@ do
 end
 
 # Set opacity in the range 0.0 (fully transparent) to 1.0 (fully opaque).
-# 
+#
 # ```fai
 # Label('Dimmed').opacity(0.5)
 # ```
@@ -626,7 +626,7 @@ end
 # Do not use `withKey` as a styling hook. HTML renderers may expose the
 # key as `data-fai-key` for patching/debugging, but CSS should use
 # first-class modifiers or `cssClass` instead.
-# 
+#
 # ```fai
 # for task in tasks
 #     TaskCard(task).withKey(convert.toString(task.id))
@@ -647,11 +647,11 @@ end
 # (e.g. `fai-span` for `Span`); `cssClass` appends the user-supplied
 # name so app stylesheets can hook nodes without inline `style="…"`
 # repetition.
-# 
+#
 # The main use case is syntax-highlighted token streams — pair each
 # `Span` with one of a small palette of class names that app CSS
 # styles:
-# 
+#
 # ```fai
 # Pre do
 #     Span('def').cssClass('tok-kw')
@@ -659,7 +659,7 @@ end
 #     Span('\n# Add two numbers.').cssClass('tok-cmt')
 # end
 # ```
-# 
+#
 # It also works on any other node kind — `Label('beta').cssClass('badge')`
 # is fine — but treat it as an escape hatch for reusable app CSS,
 # pseudo-selectors, media queries, syntax highlighting, or missing Forui

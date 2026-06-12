@@ -74,10 +74,10 @@ var treeStack ViewNode[] = []
 var frameStarts Int[] = []
 
 # ── Composition pattern
-# 
+#
 # Reusable layout shells — a Section, Card, Panel, etc. — must accept
 # a `Children` closure parameter rather than a pre-built `ViewNode`:
-# 
+#
 # def Section                          # ✓ right
 # @param title String
 # @param builder Children
@@ -89,13 +89,13 @@ var frameStarts Int[] = []
 # end
 # card.padding(16)
 # end
-# 
+#
 # # Call site
 # Section('Title', do
 # Label('inside the card')
 # Button('OK')
 # end)
-# 
+#
 # This works because a ViewNode constructor (VStack/HStack/Button/...)
 # eagerly registers its result into whichever frame is active at
 # construction time. If a helper accepts a ViewNode parameter instead,
@@ -181,7 +181,7 @@ end
 # ── Tree helpers ────────────────────────────────────────────────────
 # Number of direct children on a node. Use in tests against the tree
 # returned by `testMount`.
-# 
+#
 # ```fai
 # let tree = testMount(Page)
 # assert.equals(childCount(tree), 3)
@@ -194,7 +194,7 @@ do
 end
 
 # Direct child at `index` (0-based). Out-of-range indexes trap.
-# 
+#
 # ```fai
 # let label = getChild(testMount(Page), 0)
 # assert.equals(label.kind, 'Label')
@@ -209,7 +209,7 @@ end
 
 # Read a String prop by key. Returns `null` when the prop is missing.
 # Use with `unwrap(..., fallback)` for safe reads.
-# 
+#
 # ```fai
 # assert.equals(unwrap(getProp(label, 'text'), ''), 'Welcome')
 # ```
@@ -222,7 +222,7 @@ do
 end
 
 # Read an Int prop by key. Returns `null` when the prop is missing.
-# 
+#
 # ```fai
 # let padding = unwrap(getIntProp(node, 'padding'), 0)
 # ```
@@ -235,7 +235,7 @@ do
 end
 
 # True when a prop with this key is set on the node (regardless of type).
-# 
+#
 # ```fai
 # assert.isTrue(hasProp(tree, 'cornerRadius'))
 # ```
@@ -250,7 +250,7 @@ end
 # Find the first descendant whose `kind` matches (e.g. 'Label', 'Button',
 # 'VStack'). Depth-first. Returns `null` if no match. Primary tool for
 # writing UI tests without worrying about tree depth.
-# 
+#
 # ```fai
 # let tree = testMount(Page)
 # let btn = findByKind(tree, 'Button')
@@ -277,7 +277,7 @@ end
 # Find the first descendant whose string prop `key` equals `value`.
 # Depth-first. Returns `null` if no match. Handy for locating a specific
 # Label or Button by its text in tests.
-# 
+#
 # ```fai
 # let tree = testMount(Page)
 # let submit = findByProp(tree, 'text', 'Submit')

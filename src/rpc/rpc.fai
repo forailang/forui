@@ -7,10 +7,10 @@ use std.json
 use std.string
 
 # RPC Server — handles POST /fai/rpc and GET /fai/interface
-# 
+#
 # The developer provides a dispatch function that maps function names to results.
 # The RPC library handles HTTP, JSON parsing, hash checking, and error wrapping.
-# 
+#
 # Usage:
 # def dispatch(fnName: String, argsJson: String) -> String
 # if fnName == 'myModule.getTasks'
@@ -19,7 +19,7 @@ use std.string
 # ''
 # end
 # end
-# 
+#
 # serveRpc(3030, interfaceJson, interfaceHash, dispatch)
 # Start an RPC server on the given port.
 # - specJson: the interface spec JSON string (served at GET /fai/interface)
@@ -79,7 +79,7 @@ do
 end
 
 # Parse the args JSON from an RPC request body.
-# 
+#
 # The RPC wire format has `args` as a raw JSON value (normally an
 # array), not a string — `remoteCall` builds the body with
 # `"args":[...]`, not `"args":"[...]"`. We re-stringify so the

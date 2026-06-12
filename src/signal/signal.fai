@@ -266,7 +266,7 @@ end
 # Write a new value to a signal. Marks it loaded (clearing any error)
 # and triggers a re-render. The signal variable must be declared `var`
 # so it can be passed as a mutable argument.
-# 
+#
 # ```fai
 # var count = useSignal(0)
 # Button('Click', onClick: do
@@ -356,7 +356,7 @@ end
 # ── Status Helpers ──────────────────────────────────────────────────
 # True before the signal has ever attempted to load (initial state).
 # Usually transient — signals with loaders move to `loading` immediately.
-# 
+#
 # ```fai
 # if tasks.isInitial()
 #     Label('Ready to load')
@@ -371,7 +371,7 @@ end
 
 # True while a loader is running. Render a spinner or loading message
 # in this branch.
-# 
+#
 # ```fai
 # if tasks.isLoading()
 #     LoadingLabel()
@@ -386,7 +386,7 @@ end
 
 # True once the loader has completed successfully. The signal's `.value()`
 # is usable in this state.
-# 
+#
 # ```fai
 # if tasks.isLoaded()
 #     for t in tasks.value()
@@ -403,7 +403,7 @@ end
 
 # True when the most recent load failed. Read `signal.error` for the
 # message.
-# 
+#
 # ```fai
 # if tasks.isError()
 #     Label('Error: ' + tasks.error!).foreground('#b3261e')
