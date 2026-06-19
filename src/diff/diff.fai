@@ -100,7 +100,7 @@ do
                 end
                 var i = 0
                 while i < minLen
-                    var childPath = "{{path}}.{{i}}"
+                    var childPath = path + '.' + toString(i)
                     if path == ''
                         childPath = toString(i)
                     end
@@ -112,7 +112,7 @@ do
                 end
                 var j = minLen
                 while j < newLen
-                    var jPath = "{{path}}.{{j}}"
+                    var jPath = path + '.' + toString(j)
                     if path == ''
                         jPath = toString(j)
                     end
@@ -121,7 +121,7 @@ do
                 end
                 var k = minLen
                 while k < oldLen
-                    var kPath = "{{path}}.{{k}}"
+                    var kPath = path + '.' + toString(k)
                     if path == ''
                         kPath = toString(k)
                     end

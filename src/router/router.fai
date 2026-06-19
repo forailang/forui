@@ -4,7 +4,7 @@ use std.array
 
 use std.convert
 
-use { ViewNode, emptyEvents, registerNode, pushFrame, popFrame, attachClickHandler, Children, Label } from view
+use { ViewNode, Events, ClickAction, emptyEvents, registerNode, pushFrame, popFrame, registerHandler, Children, Label, VStack, childCount, getChild } from view
 
 use { Signal, createSignal, setValue, value, clearHookSignals } from signal
 
@@ -346,12 +346,16 @@ do
     children()
     let kids = popFrame()
     let props = set({}, 'to', to)
-    let node = ViewNode(kind: 'Link', key: '', props: props, children: kids, events: emptyEvents())
-    registerNode(node)
     let target = to
-    attachClickHandler(node) do
+    let handler ClickAction = do
         navigate(target)
     end
+    let handlerId = registerHandler(handler)
+    let linkProps = set(props, 'handlerId', handlerId)
+    let events = Events(onClick: handler, onChange: null)
+    let node = ViewNode(kind: 'Link', key: '', props: linkProps, children: kids, events: events)
+    registerNode(node)
+    node
 end
 
 test splitPath
@@ -587,6 +591,15 @@ test Link
         assert.equals(array.length(link.children), 1)
         assert.equals(link.children[0].kind, 'Label')
         assert.equals(link.events.onClick?, true)
+    end
+    it 'registers a Link with click handler inside a container'
+        let tree = VStack do
+            Link('/settings') do
+                Label('Go to Settings')
+            end
+        end
+        assert.equals(childCount(tree), 1)
+        assert.equals(getChild(tree, 0).events.onClick?, true)
     end
 end
 

@@ -34,6 +34,10 @@ var dirtySignalIds Int[] = []
 
 var registeredSignals Signal[] = []
 
+var registeredSignalActive Bool[] = []
+
+var inactiveSignal = Signal(id: -1, _value: null, status: SignalStatus.initial, error: null, loader: null, hasPending: false, pendingValue: null, pendingStatus: SignalStatus.initial, pendingError: null)
+
 var ssrMode = false
 
 var renderingActiveFlag = false
@@ -90,13 +94,15 @@ def commitPendingWrites
     @return Void
 do
     for id in pendingSignalIds
-        var signal = signalById(id)
-        if signal.hasPending
-            signal._value = signal.pendingValue!
-            signal.status = signal.pendingStatus
-            signal.error = signal.pendingError
-            signal.hasPending = false
-            signal.pendingValue = null
+        if signalIsActive(id)
+            var signal = signalById(id)
+            if signal.hasPending
+                signal._value = copy(signal.pendingValue!)
+                signal.status = signal.pendingStatus
+                signal.error = signal.pendingError
+                signal.hasPending = false
+                signal.pendingValue = null
+            end
         end
     end
     pendingSignalIds = []
@@ -132,9 +138,87 @@ def createSignal
 do
     let id = nextSignalId
     nextSignalId = nextSignalId + 1
-    let sig = Signal(id: id, _value: initialValue, status: SignalStatus.initial, error: null, loader: loader, hasPending: false, pendingValue: null, pendingStatus: SignalStatus.initial, pendingError: null)
+    let sig = Signal(id: id, _value: copy(initialValue), status: SignalStatus.initial, error: null, loader: loader, hasPending: false, pendingValue: null, pendingStatus: SignalStatus.initial, pendingError: null)
     registeredSignals = array.append(registeredSignals, sig)
+    registeredSignalActive = array.append(registeredSignalActive, true)
     sig
+end
+
+# Drop the registry's strong reference to a signal that is no longer reachable
+# from the active hook state. The id slot remains reserved so detached loaders
+# for still-registered signals keep stable ids.
+def unregisterSignal
+    @param signal Signal
+    @return Void
+do
+    if signal.id >= 0
+        if signal.id < length(registeredSignals)
+            registeredSignals[signal.id] = inactiveSignal
+            registeredSignalActive[signal.id] = false
+        end
+    end
+end
+
+# True when the id names a currently registered signal slot.
+def signalIsActive
+    @param id Int
+    @return Bool
+do
+    if id < 0
+        false
+    else
+        if id >= length(registeredSignalActive)
+            false
+        else
+            registeredSignalActive[id]
+        end
+    end
+end
+
+test signalIsActive
+    it 'tracks active and unregistered slots'
+        let s = createSignal('tracked')
+        assert.isTrue(signalIsActive(s.id))
+        unregisterSignal(s)
+        assert.isFalse(signalIsActive(s.id))
+        assert.isFalse(signalIsActive(-1))
+        assert.isFalse(signalIsActive(length(registeredSignalActive)))
+    end
+end
+
+# Count registry slots that still hold an active signal.
+def registeredSignalCount
+    @return Int
+do
+    var count = 0
+    for active in registeredSignalActive
+        if active
+            count = count + 1
+        end
+    end
+    count
+end
+
+test unregisterSignal
+    it 'replaces an active registry slot with a tombstone'
+        let before = registeredSignalCount()
+        let s = createSignal('temporary')
+        assert.equals(registeredSignalCount(), before + 1)
+        unregisterSignal(s)
+        assert.equals(registeredSignalCount(), before)
+        assert.isNull(signalById(s.id)
+            .value())
+    end
+end
+
+test registeredSignalCount
+    it 'counts only active registry slots'
+        let before = registeredSignalCount()
+        let s = createSignal(1)
+        assert.equals(registeredSignalCount(), before + 1)
+        unregisterSignal(s)
+        assert.equals(registeredSignalCount(), before)
+    end
 end
 
 # Read a signal's current value as a deep COPY. The copy follows the caller's
@@ -280,12 +364,12 @@ def setValue
 do
     if renderingActive()
         signal.hasPending = true
-        signal.pendingValue = newValue
+        signal.pendingValue = copy(newValue)
         signal.pendingStatus = SignalStatus.loaded
         signal.pendingError = null
         recordPending(signal.id)
     else
-        signal._value = newValue
+        signal._value = copy(newValue)
         signal.status = SignalStatus.loaded
         signal.error = null
     end
@@ -300,7 +384,7 @@ def setLoading
 do
     if renderingActive()
         signal.hasPending = true
-        signal.pendingValue = signal._value
+        signal.pendingValue = copy(signal._value)
         signal.pendingStatus = SignalStatus.loading
         signal.pendingError = null
         recordPending(signal.id)
@@ -320,12 +404,12 @@ def setLoaded
 do
     if renderingActive()
         signal.hasPending = true
-        signal.pendingValue = newValue
+        signal.pendingValue = copy(newValue)
         signal.pendingStatus = SignalStatus.loaded
         signal.pendingError = null
         recordPending(signal.id)
     else
-        signal._value = newValue
+        signal._value = copy(newValue)
         signal.status = SignalStatus.loaded
         signal.error = null
     end
@@ -341,7 +425,7 @@ def setError
 do
     if renderingActive()
         signal.hasPending = true
-        signal.pendingValue = signal._value
+        signal.pendingValue = copy(signal._value)
         signal.pendingStatus = SignalStatus.error
         signal.pendingError = message
         recordPending(signal.id)
@@ -425,6 +509,12 @@ test createSignal
         assert.equals(s1.error, null)
         assert.equals(s1.id == s2.id, false)
     end
+    it 'stores a copy of mutable initial array values'
+        var initial = [1 2 3]
+        let s = createSignal(initial)
+        initial[0] = 99
+        assert.equals(s.value()[0], 1)
+    end
 end
 
 test setValue
@@ -444,6 +534,18 @@ test setValue
         s.setValue(42)
         assert.equals(s.error, null)
         assert.equals(s.value(), 42)
+        clearDirty()
+    end
+    it 'stores a copy of mutable array values'
+        clearDirty()
+        var source = [
+            1
+            2
+        ]
+        var s = createSignal([])
+        s.setValue(source)
+        source[0] = 9
+        assert.equals(s.value()[0], 1)
         clearDirty()
     end
 end
@@ -471,6 +573,18 @@ test setLoaded
         assert.equals(s.value(), 99)
         assert.equals(s.status, SignalStatus.loaded)
         assert.equals(isSignalDirty(s.id), true)
+        clearDirty()
+    end
+    it 'stores a copy of loaded array values'
+        clearDirty()
+        var source = [
+            1
+            2
+        ]
+        var s = createSignal([])
+        s.setLoaded(source)
+        source[0] = 9
+        assert.equals(s.value()[0], 1)
         clearDirty()
     end
 end
@@ -805,6 +919,19 @@ test commitPendingWrites
         assert.equals(s.status, SignalStatus.loaded)
         assert.equals(s.hasPending, false)
         setRenderingActive(false)
+        clearDirty()
+    end
+    it 'copies pending array values into the committed signal slot'
+        clearDirty()
+        setRenderingActive(true)
+        var s = createSignal([])
+        s.setLoaded([1 2 3])
+        commitPendingWrites()
+        setRenderingActive(false)
+        var got = s.value()
+        got[0] = 99
+        assert.equals(s.value()[0], 1)
+        assert.equals(length(s.value()), 3)
         clearDirty()
     end
     it 'applies writes immediately when no render is active'

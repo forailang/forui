@@ -124,19 +124,19 @@ do
     children
 end
 
-# Register a completed node in the current frame.
+# Register a completed node in the current frame. Root nodes are returned by
+# their caller, so only active child-collection frames should retain nodes.
 def registerNode
     @param node ViewNode
     @return Void
 do
-    treeStack = array.append(treeStack, node)
+    if length(frameStarts) > 0
+        treeStack = array.append(treeStack, node)
+    end
 end
 
-# Reset the tree-building context to empty. A full render leaves the root node
-# registered in `treeStack` (nothing pops the outermost frame), so the global
-# would keep a reference to the whole rendered tree — leaking it every render.
-# `renderSSR` calls this once it has taken the tree, leaving the returned value
-# as the only owner so releasing it fully reclaims the tree.
+# Reset the tree-building context to empty after aborted or stateful render/test
+# paths.
 def clearTreeStack
     @return Void
 do
@@ -157,6 +157,9 @@ def replaceLastNode
     @param node ViewNode
     @return Void
 do
+    if length(frameStarts) == 0
+        return
+    end
     let last = length(treeStack) - 1
     if last >= 0
         treeStack[last] = node
@@ -390,6 +393,11 @@ test registerNode
         let kids = popFrame()
         assert.equals(array.length(kids), 1)
         assert.equals(kids[0].kind, 'X')
+    end
+    it 'does not retain root nodes outside a frame'
+        clearTreeStack()
+        registerNode(testNode('Root'))
+        assert.equals(array.length(treeStack), 0)
     end
 end
 

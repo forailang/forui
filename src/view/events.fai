@@ -19,12 +19,21 @@ def attachClickHandler
     @param handler ClickAction
     @return ViewNode
 do
+    let result = nodeWithClickHandler(node, handler)
+    replaceLastNode(result)
+    result
+end
+
+# Build a copy of a node with a click handler without touching the render frame.
+def nodeWithClickHandler
+    @param node ViewNode
+    @param handler ClickAction
+    @return ViewNode
+do
     let handlerId = registerHandler(handler)
     let props = set(node.props, 'handlerId', handlerId)
     let events = Events(onClick: handler, onChange: node.events.onChange)
-    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: events)
-    replaceLastNode(result)
-    result
+    ViewNode(kind: node.kind, key: node.key, props: props, children: array.slice(node.children, 0, length(node.children)), events: events)
 end
 
 # AttachChangeHandler.
@@ -36,7 +45,7 @@ do
     let changeId = registerChangeHandler(handler)
     let props = set(node.props, 'changeHandlerId', changeId)
     let events = Events(onClick: node.events.onClick, onChange: handler)
-    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: events)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: array.slice(node.children, 0, length(node.children)), events: events)
     replaceLastNode(result)
     result
 end
@@ -193,6 +202,19 @@ test attachClickHandler
         clearHandlers()
         let b = Button('A')
         let withHandler = attachClickHandler(b) do
+            print('hit')
+        end
+        assert.equals(getIntProp(withHandler, 'handlerId')!, 0)
+        assert.equals(withHandler.events.onClick?, true)
+        clearHandlers()
+    end
+end
+
+test nodeWithClickHandler
+    it 'sets handlerId without replacing the frame node'
+        clearHandlers()
+        let node = testNode('Button')
+        let withHandler = nodeWithClickHandler(node) do
             print('hit')
         end
         assert.equals(getIntProp(withHandler, 'handlerId')!, 0)

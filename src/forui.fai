@@ -1,12 +1,12 @@
 use std.array
 
-use { ViewNode, clearHandlers, clearTreeStack, emptyEvents, getProp, installViewEventBridge } from view
+use { ViewNode, clearHandlers, clearTreeStack, emptyEvents, getProp, installViewEventBridge, VStack, Label, TextInput } from view
 
 use { hasDirtySignals, clearDirty, onSignalChange, clearOnSignalChange, resetHooks, enterSsrMode, exitSsrMode, saveHookState, restoreHookState, setRenderingActive, renderingActive, commitPendingWrites } from signal
 
 use { DiffOp, diffTrees } from diff
 
-use { setPathFromPlatform } from router
+use { setPathFromPlatform, Router, Route, Link, navigate } from router
 
 # The root render function for a forui app. Returns the current UI tree.
 # Passed to mount() or renderSSR().
@@ -35,6 +35,130 @@ var renderScheduled = false
 var renderRequested = false
 
 var maxRenderPasses = 50
+
+# Store a detached, event-free tree for future diffs. The rendered tree can
+# contain handler closures and child arrays owned by the current render pass;
+# previousTree must not alias those pass-local children in browser wasm.
+def snapshotTree
+    @param node ViewNode
+    @return ViewNode
+do
+    var kids ViewNode[] = []
+    for child in node.children
+        kids = array.append(kids, snapshotTree(child))
+    end
+    ViewNode(kind: node.kind, key: node.key, props: copy(node.props), children: kids, events: emptyEvents())
+end
+
+test snapshotTree
+    it 'copies nested children for previous-tree storage'
+        let tree = VStack do
+            Label('Child')
+        end
+        let snapshot = snapshotTree(tree)
+        assert.equals(snapshot.kind, 'VStack')
+        assert.equals(array.length(snapshot.children), 1)
+        assert.equals(snapshot.children[0].kind, 'Label')
+        assert.equals(snapshot.events.onClick?, false)
+    end
+end
+
+# True when two rendered roots are router nodes for different paths.
+# Route changes replace the root subtree instead of recursively diffing
+# unrelated page trees.
+def routePathChanged
+    @param oldNode ViewNode
+    @param newNode ViewNode
+    @return Bool
+do
+    if oldNode.kind == 'Router'
+        if newNode.kind == 'Router'
+            let oldPath = getProp(oldNode, 'currentPath')
+            let newPath = getProp(newNode, 'currentPath')
+            if oldPath?
+                if newPath?
+                    oldPath! != newPath!
+                else
+                    false
+                end
+            else
+                false
+            end
+        else
+            false
+        end
+    else
+        false
+    end
+end
+
+test routePathChanged
+    it 'detects router path changes'
+        let oldNode = ViewNode(kind: 'Router', key: '', props: set({}, 'currentPath', '/settings'), children: [], events: emptyEvents())
+        let newNode = ViewNode(kind: 'Router', key: '', props: set({}, 'currentPath', '/settings/hooks'), children: [], events: emptyEvents())
+        assert.isTrue(routePathChanged(oldNode, newNode))
+    end
+    it 'ignores unchanged router paths'
+        let oldNode = ViewNode(kind: 'Router', key: '', props: set({}, 'currentPath', '/settings'), children: [], events: emptyEvents())
+        let newNode = ViewNode(kind: 'Router', key: '', props: set({}, 'currentPath', '/settings'), children: [], events: emptyEvents())
+        assert.isFalse(routePathChanged(oldNode, newNode))
+    end
+end
+
+# Build replacement ops for routed roots. A path change replaces the
+# whole router root; same-route updates replace only the active route
+# child so async page transitions never recursively diff page trees.
+def routerReplaceOps
+    @param oldNode ViewNode
+    @param newNode ViewNode
+    @return DiffOp[]?
+do
+    if oldNode.kind == 'Router'
+        if newNode.kind == 'Router'
+            if routePathChanged(oldNode, newNode)
+                [
+                    DiffOp(action: 'replace', path: '', node: newNode, props: null)
+                ]
+            else
+                if array.length(newNode.children) > 0
+                    [
+                        DiffOp(action: 'replace', path: '0', node: newNode.children[0], props: null)
+                    ]
+                else
+                    var empty DiffOp[] = []
+                    empty
+                end
+            end
+        else
+            var noOps DiffOp[]? = null
+            noOps
+        end
+    else
+        var noOps DiffOp[]? = null
+        noOps
+    end
+end
+
+test routerReplaceOps
+    it 'replaces router roots on path changes'
+        let oldNode = ViewNode(kind: 'Router', key: '', props: set({}, 'currentPath', '/settings'), children: [], events: emptyEvents())
+        let newNode = ViewNode(kind: 'Router', key: '', props: set({}, 'currentPath', '/settings/hooks'), children: [], events: emptyEvents())
+        let ops = routerReplaceOps(oldNode, newNode)
+        assert.isTrue(ops?)
+        assert.equals(ops![0].path, '')
+    end
+    it 'replaces the active route child on same-route updates'
+        let oldNode = ViewNode(kind: 'Router', key: '', props: set({}, 'currentPath', '/settings'), children: [testForuiLabel('old')], events: emptyEvents())
+        let newNode = ViewNode(kind: 'Router', key: '', props: set({}, 'currentPath', '/settings'), children: [testForuiLabel('new')], events: emptyEvents())
+        let ops = routerReplaceOps(oldNode, newNode)
+        assert.isTrue(ops?)
+        assert.equals(ops![0].path, '0')
+        assert.equals(ops![0].node!.kind, 'Label')
+    end
+    it 'falls through for non-router roots'
+        assert.isFalse(routerReplaceOps(testForuiLabel('old'), testForuiLabel('new'))?)
+    end
+end
 
 # ── Render scheduling ───────────────────────────────────────────────
 # A signal change does not render inline. `requestRender` coalesces all
@@ -72,6 +196,7 @@ do
     end
     if mountedAdapter?
         clearHandlers()
+        clearTreeStack()
         clearDirty()
         resetHooks()
         setRenderingActive(true)
@@ -82,7 +207,8 @@ do
         ]
         lastDiffOps = initialOps
         mountedAdapter!(tree, initialOps)
-        previousTree = copy(tree)
+        let initialSnapshot = snapshotTree(tree)
+        previousTree = initialSnapshot
         let stillDirty = hasDirtySignals()
         clearDirty()
         if stillDirty
@@ -105,16 +231,24 @@ do
         if mountedAdapter?
             commitPendingWrites()
             clearHandlers()
+            clearTreeStack()
             resetHooks()
             let tree = mountedApp!()
             if previousTree?
-                let ops = diffTrees(previousTree!, tree)
+                var ops DiffOp[] = []
+                let routerOps = routerReplaceOps(previousTree!, tree)
+                if routerOps?
+                    ops = routerOps!
+                else
+                    ops = diffTrees(previousTree!, tree)
+                end
                 lastDiffOps = ops
                 if array.length(ops) > 0
                     mountedAdapter!(tree, ops)
                 end
             end
-            previousTree = copy(tree)
+            let snapshot = snapshotTree(tree)
+            previousTree = snapshot
         end
     end
 end
@@ -308,6 +442,36 @@ do
     testForuiLabel('requesting')
 end
 
+# Test router app with different child shapes across navigation.
+def navigationApp
+    @return ViewNode
+do
+    Router do
+        Route('/') do
+            VStack do
+                Link('/session/login') do
+                    Label('Log in')
+                end
+                Label('Home')
+            end
+        end
+        Route('/session/login') do
+            VStack do
+                Label('SIGN IN')
+                TextInput('Email')
+            end
+        end
+    end
+end
+
+test navigationApp
+    it 'renders the home route'
+        navigate('/')
+        let tree = navigationApp()
+        assert.equals(tree.kind, 'Router')
+    end
+end
+
 var testOps DiffOp[] = []
 
 var testCallCount = 0
@@ -386,6 +550,16 @@ test rerender
         assert.equals(testCallCount, callsAfterMount + 1)
         assert.equals(array.length(testOps), 1)
         assert.equals(testOps[0].action, 'update')
+    end
+    it 'diffs router navigation without invalid child memory'
+        resetCapture()
+        navigate('/')
+        mount(navigationApp, testAdapter)
+        navigate('/session/login')
+        runRenderCycle()
+        assert.equals(testCallCount > 1, true)
+        assert.equals(array.length(testOps), 1)
+        assert.equals(testOps[0].action, 'replace')
     end
     afterEach
         clearOnSignalChange()

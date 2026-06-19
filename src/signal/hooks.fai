@@ -35,6 +35,9 @@ end
 def clearHookSignals
     @return Void
 do
+    for signal in hookSignals
+        unregisterSignal(signal)
+    end
     hookSignals = []
 end
 
@@ -129,12 +132,18 @@ def doLoad
     @param loader Loader
     @return Void
 do
-    var signal = signalById(id)
-    try
-        let data = loader()
-        setLoaded(signal, data)
-    catch e
-        setError(signal, e.message)
+    if signalIsActive(id)
+        var signal = signalById(id)
+        try
+            let data = loader()
+            if signalIsActive(id)
+                setLoaded(signal, data)
+            end
+        catch e
+            if signalIsActive(id)
+                setError(signal, e.message)
+            end
+        end
     end
 end
 
@@ -169,6 +178,15 @@ test clearHookSignals
         hookSignals = [createSignal(0) createSignal(1)]
         clearHookSignals()
         assert.equals(array.length(hookSignals), 0)
+    end
+    it 'drops route-local signals from the registry'
+        let before = registeredSignalCount()
+        let a = createSignal(0)
+        let b = createSignal(1)
+        hookSignals = [a b]
+        assert.equals(registeredSignalCount(), before + 2)
+        clearHookSignals()
+        assert.equals(registeredSignalCount(), before)
     end
 end
 

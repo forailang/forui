@@ -39,7 +39,7 @@ do
         props = set(props, 'paddingBottom', bottom)
         props = set(props, 'paddingLeft', left)
     end
-    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: array.slice(node.children, 0, length(node.children)), events: node.events)
     replaceLastNode(result)
     result
 end
@@ -55,7 +55,7 @@ def paddingTop
     @return ViewNode
 do
     let props = set(node.props, 'paddingTop', amount)
-    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: array.slice(node.children, 0, length(node.children)), events: node.events)
     replaceLastNode(result)
     result
 end
@@ -71,7 +71,7 @@ def paddingBottom
     @return ViewNode
 do
     let props = set(node.props, 'paddingBottom', amount)
-    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: array.slice(node.children, 0, length(node.children)), events: node.events)
     replaceLastNode(result)
     result
 end
@@ -87,7 +87,7 @@ def paddingLeft
     @return ViewNode
 do
     let props = set(node.props, 'paddingLeft', amount)
-    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: array.slice(node.children, 0, length(node.children)), events: node.events)
     replaceLastNode(result)
     result
 end
@@ -103,7 +103,7 @@ def paddingRight
     @return ViewNode
 do
     let props = set(node.props, 'paddingRight', amount)
-    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: array.slice(node.children, 0, length(node.children)), events: node.events)
     replaceLastNode(result)
     result
 end
@@ -141,7 +141,7 @@ do
         props = set(props, 'marginBottom', bottom)
         props = set(props, 'marginLeft', left)
     end
-    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: array.slice(node.children, 0, length(node.children)), events: node.events)
     replaceLastNode(result)
     result
 end
@@ -157,7 +157,7 @@ def marginTop
     @return ViewNode
 do
     let props = set(node.props, 'marginTop', amount)
-    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: array.slice(node.children, 0, length(node.children)), events: node.events)
     replaceLastNode(result)
     result
 end
@@ -173,7 +173,7 @@ def marginBottom
     @return ViewNode
 do
     let props = set(node.props, 'marginBottom', amount)
-    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: array.slice(node.children, 0, length(node.children)), events: node.events)
     replaceLastNode(result)
     result
 end
@@ -189,7 +189,7 @@ def marginLeft
     @return ViewNode
 do
     let props = set(node.props, 'marginLeft', amount)
-    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: array.slice(node.children, 0, length(node.children)), events: node.events)
     replaceLastNode(result)
     result
 end
@@ -205,7 +205,7 @@ def marginRight
     @return ViewNode
 do
     let props = set(node.props, 'marginRight', amount)
-    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: array.slice(node.children, 0, length(node.children)), events: node.events)
     replaceLastNode(result)
     result
 end
@@ -221,7 +221,7 @@ def background
     @return ViewNode
 do
     let props = set(node.props, 'background', color)
-    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: array.slice(node.children, 0, length(node.children)), events: node.events)
     replaceLastNode(result)
     result
 end
@@ -237,7 +237,7 @@ def foreground
     @return ViewNode
 do
     let props = set(node.props, 'foreground', color)
-    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: array.slice(node.children, 0, length(node.children)), events: node.events)
     replaceLastNode(result)
     result
 end
@@ -253,7 +253,7 @@ def cornerRadius
     @return ViewNode
 do
     let props = set(node.props, 'cornerRadius', radius)
-    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: array.slice(node.children, 0, length(node.children)), events: node.events)
     replaceLastNode(result)
     result
 end
@@ -274,7 +274,7 @@ def border
 do
     var props = set(node.props, 'borderWidth', width)
     props = set(props, 'borderColor', color)
-    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: array.slice(node.children, 0, length(node.children)), events: node.events)
     replaceLastNode(result)
     result
 end
@@ -288,7 +288,7 @@ def borderLeft
 do
     var props = set(node.props, 'borderLeftWidth', width)
     props = set(props, 'borderLeftColor', color)
-    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: array.slice(node.children, 0, length(node.children)), events: node.events)
     replaceLastNode(result)
     result
 end
@@ -304,7 +304,7 @@ def fontSize
     @return ViewNode
 do
     let props = set(node.props, 'fontSize', size)
-    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: array.slice(node.children, 0, length(node.children)), events: node.events)
     replaceLastNode(result)
     result
 end
@@ -321,7 +321,7 @@ def fontWeight
     @return ViewNode
 do
     let props = set(node.props, 'fontWeight', weight)
-    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: array.slice(node.children, 0, length(node.children)), events: node.events)
     replaceLastNode(result)
     result
 end
@@ -338,7 +338,7 @@ def flex
     @return ViewNode
 do
     let props = set(node.props, 'flex', value)
-    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: array.slice(node.children, 0, length(node.children)), events: node.events)
     replaceLastNode(result)
     result
 end
@@ -351,7 +351,7 @@ def alignItems
     @return ViewNode
 do
     let props = set(node.props, 'alignItems', value)
-    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: array.slice(node.children, 0, length(node.children)), events: node.events)
     replaceLastNode(result)
     result
 end
@@ -364,7 +364,7 @@ def justifyContent
     @return ViewNode
 do
     let props = set(node.props, 'justifyContent', value)
-    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: array.slice(node.children, 0, length(node.children)), events: node.events)
     replaceLastNode(result)
     result
 end
@@ -377,7 +377,7 @@ def flexWrap
     @return ViewNode
 do
     let props = set(node.props, 'flexWrap', value)
-    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: array.slice(node.children, 0, length(node.children)), events: node.events)
     replaceLastNode(result)
     result
 end
@@ -389,7 +389,7 @@ def gap
     @return ViewNode
 do
     let props = set(node.props, 'gap', amount)
-    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: array.slice(node.children, 0, length(node.children)), events: node.events)
     replaceLastNode(result)
     result
 end
@@ -401,7 +401,7 @@ def alignSelf
     @return ViewNode
 do
     let props = set(node.props, 'alignSelf', value)
-    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: array.slice(node.children, 0, length(node.children)), events: node.events)
     replaceLastNode(result)
     result
 end
@@ -413,7 +413,7 @@ def display
     @return ViewNode
 do
     let props = set(node.props, 'display', value)
-    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: array.slice(node.children, 0, length(node.children)), events: node.events)
     replaceLastNode(result)
     result
 end
@@ -433,7 +433,7 @@ def width
     @return ViewNode
 do
     let props = set(node.props, 'width', value)
-    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: array.slice(node.children, 0, length(node.children)), events: node.events)
     replaceLastNode(result)
     result
 end
@@ -445,7 +445,7 @@ def minWidth
     @return ViewNode
 do
     let props = set(node.props, 'minWidth', value)
-    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: array.slice(node.children, 0, length(node.children)), events: node.events)
     replaceLastNode(result)
     result
 end
@@ -457,7 +457,7 @@ def height
     @return ViewNode
 do
     let props = set(node.props, 'height', value)
-    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: array.slice(node.children, 0, length(node.children)), events: node.events)
     replaceLastNode(result)
     result
 end
@@ -469,7 +469,7 @@ def minHeight
     @return ViewNode
 do
     let props = set(node.props, 'minHeight', value)
-    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: array.slice(node.children, 0, length(node.children)), events: node.events)
     replaceLastNode(result)
     result
 end
@@ -489,7 +489,7 @@ def maxWidth
     @return ViewNode
 do
     let props = set(node.props, 'maxWidth', value)
-    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: array.slice(node.children, 0, length(node.children)), events: node.events)
     replaceLastNode(result)
     result
 end
@@ -501,7 +501,7 @@ def centered
     @return ViewNode
 do
     let props = set(node.props, 'centered', 'true')
-    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: array.slice(node.children, 0, length(node.children)), events: node.events)
     replaceLastNode(result)
     result
 end
@@ -513,7 +513,7 @@ def position
     @return ViewNode
 do
     let props = set(node.props, 'position', value)
-    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: array.slice(node.children, 0, length(node.children)), events: node.events)
     replaceLastNode(result)
     result
 end
@@ -525,7 +525,7 @@ def top
     @return ViewNode
 do
     let props = set(node.props, 'top', amount)
-    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: array.slice(node.children, 0, length(node.children)), events: node.events)
     replaceLastNode(result)
     result
 end
@@ -537,7 +537,7 @@ def zIndex
     @return ViewNode
 do
     let props = set(node.props, 'zIndex', value)
-    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: array.slice(node.children, 0, length(node.children)), events: node.events)
     replaceLastNode(result)
     result
 end
@@ -553,7 +553,7 @@ def opacity
     @return ViewNode
 do
     let props = set(node.props, 'opacity', value)
-    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: array.slice(node.children, 0, length(node.children)), events: node.events)
     replaceLastNode(result)
     result
 end
@@ -566,7 +566,7 @@ def lineHeight
     @return ViewNode
 do
     let props = set(node.props, 'lineHeight', value)
-    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: array.slice(node.children, 0, length(node.children)), events: node.events)
     replaceLastNode(result)
     result
 end
@@ -578,7 +578,7 @@ def fontStyle
     @return ViewNode
 do
     let props = set(node.props, 'fontStyle', value)
-    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: array.slice(node.children, 0, length(node.children)), events: node.events)
     replaceLastNode(result)
     result
 end
@@ -590,7 +590,7 @@ def letterSpacing
     @return ViewNode
 do
     let props = set(node.props, 'letterSpacing', value)
-    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: array.slice(node.children, 0, length(node.children)), events: node.events)
     replaceLastNode(result)
     result
 end
@@ -602,7 +602,7 @@ def textAlign
     @return ViewNode
 do
     let props = set(node.props, 'textAlign', value)
-    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: array.slice(node.children, 0, length(node.children)), events: node.events)
     replaceLastNode(result)
     result
 end
@@ -614,7 +614,7 @@ def fontFamily
     @return ViewNode
 do
     let props = set(node.props, 'fontFamily', value)
-    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: array.slice(node.children, 0, length(node.children)), events: node.events)
     replaceLastNode(result)
     result
 end
@@ -637,7 +637,7 @@ def withKey
     @param value String
     @return ViewNode
 do
-    let result = ViewNode(kind: node.kind, key: value, props: node.props, children: node.children, events: node.events)
+    let result = ViewNode(kind: node.kind, key: value, props: copy(node.props), children: array.slice(node.children, 0, length(node.children)), events: node.events)
     replaceLastNode(result)
     result
 end
@@ -671,7 +671,7 @@ def cssClass
     @return ViewNode
 do
     let props = set(node.props, 'cssClass', name)
-    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: node.children, events: node.events)
+    let result = ViewNode(kind: node.kind, key: node.key, props: props, children: array.slice(node.children, 0, length(node.children)), events: node.events)
     replaceLastNode(result)
     result
 end

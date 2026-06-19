@@ -32,6 +32,7 @@ Controls:
 
 - `Button(text, onClick: do ... end)`
 - `TextInput(placeholder, signalValue: signal)`
+- `TextArea(placeholder, signalValue: signal, rows: 6)`
 - `Toggle(isOn: value, signalValue: signal)`
 - `SegmentedControl(options, signalValue: signal)`
 - `Link` lives in `Forui.router`, not `Forui.view`

@@ -67,7 +67,7 @@ source_root = "src"
 Then import explicitly per file (forui has no wildcard re-exports):
 
 ```fai
-use { VStack, HStack, Label, Button, TextInput } from Forui.view
+use { VStack, HStack, Label, Button, TextInput, TextArea } from Forui.view
 use { padding, background, fontSize, foreground } from Forui.view
 use { useSignal, setValue, reload } from Forui.signal
 use { Router, Route, Link, navigate, routeParam } from Forui.router
@@ -135,7 +135,8 @@ end.padding(16).background('#fafafa')
 ```
 
 Leaves are component functions (`Label`, `Paragraph`, `Heading`, `Button`,
-`TextInput`, `Toggle`, `SegmentedControl`, `Spacer`, `Divider`, `ImageView`).
+`TextInput`, `TextArea`, `Toggle`, `SegmentedControl`, `Spacer`, `Divider`,
+`ImageView`).
 Use `Label` for short UI/control text, `Paragraph` for prose, and
 `Heading(text, level: n)` for page or section headings. `Heading` defaults to
 level 3.
@@ -154,12 +155,15 @@ Use `withKey` only for stable identity in dynamic lists, not as a styling hook.
 
 ### Two-way binding with signals
 
-`TextInput` and `Toggle` accept `signalValue: <Signal>` for two-way
+`TextInput`, `TextArea`, and `Toggle` accept `signalValue: <Signal>` for two-way
 binding — read the signal's value, write it on change:
 
 ```fai
 var email = useSignal('')
 TextInput('Email', signalValue: email, inputType: 'email')
+
+var notes = useSignal('')
+TextArea('Notes', signalValue: notes, rows: 6)
 
 var notifications = useSignal(true)
 Toggle(signalValue: notifications)

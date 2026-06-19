@@ -14,9 +14,9 @@ platform adapter. The adapter receives a diff list after every signal change.
 Status helpers: `isLoading(sig)`, `isLoaded(sig)`, `isError(sig)`.
 
 **View tree** — build UI by returning `ViewNode` from your render function.
-Primitives: `Label`, `Paragraph`, `Heading`, `Button`, `TextInput`, `Toggle`,
-`VStack`, `HStack`, `ZStack`, `ScrollView`, `Spacer`, `Divider`, `ImageView`,
-`SegmentedControl`.
+Primitives: `Label`, `Paragraph`, `Heading`, `Button`, `TextInput`, `TextArea`,
+`Toggle`, `VStack`, `HStack`, `ZStack`, `ScrollView`, `Spacer`, `Divider`,
+`ImageView`, `SegmentedControl`.
 Modifiers are ordinary functions and work well through UFCS chaining:
 `padding`, `background`, `foreground`,
 `cornerRadius`, `fontSize`, `fontWeight`, `lineHeight`, `fontStyle`,

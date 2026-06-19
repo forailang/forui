@@ -2,7 +2,7 @@ use std.array
 
 use std.events
 
-use { Signal, setValue, value } from signal
+use { Signal, createSignal, setValue, value } from signal
 
 # ── Container primitives ────────────────────────────────────────────
 # Top-level application window. Exactly one should wrap the app root.
@@ -294,6 +294,46 @@ do
     node
 end
 
+# Multi-line text input. Bind to a Signal for two-way reactivity, or
+# supply `text` + `onChange` for controlled use. `rows` maps to the
+# HTML `<textarea rows=...>` attribute when provided.
+#
+# ```fai
+# var body = useSignal('')
+# TextArea('Notes', signalValue: body, rows: 6)
+# ```
+def TextArea
+    @param placeholder String
+    @param text String?, default: null
+    @param signalValue Signal?, default: null
+    @param onChange ChangeAction?, default: null
+    @param rows Int?, default: null
+    @return ViewNode
+do
+    var props = set({}, 'placeholder', placeholder)
+    if rows != null
+        props = set(props, 'rows', rows!)
+    end
+    if signalValue != null
+        props = set(props, 'value', signalValue!.value())
+        let changeId = registerChangeHandler do with newValue String
+            signalValue!.setValue(newValue)
+        end
+        props = set(props, 'changeHandlerId', changeId)
+    else
+        if text != null
+            props = set(props, 'value', text!)
+        end
+        if onChange != null
+            let changeId = registerChangeHandler(onChange!)
+            props = set(props, 'changeHandlerId', changeId)
+        end
+    end
+    let node = ViewNode(kind: 'TextArea', key: '', props: props, children: [], events: emptyEvents())
+    registerNode(node)
+    node
+end
+
 # Clickable button. `onClick` is a `do ... end` closure with no args.
 #
 # ```fai
@@ -308,11 +348,17 @@ def Button
     @return ViewNode
 do
     let props = set({}, 'text', text)
-    let node = ViewNode(kind: 'Button', key: '', props: props, children: [], events: emptyEvents())
-    registerNode(node)
     if onClick != null
-        attachClickHandler(node, onClick!)
+        let handler ClickAction = onClick!
+        let handlerId = registerHandler(handler)
+        let buttonProps = set(props, 'handlerId', handlerId)
+        let events = Events(onClick: handler, onChange: null)
+        let result = ViewNode(kind: 'Button', key: '', props: buttonProps, children: [], events: events)
+        registerNode(result)
+        result
     else
+        let node = ViewNode(kind: 'Button', key: '', props: props, children: [], events: emptyEvents())
+        registerNode(node)
         node
     end
 end
@@ -379,17 +425,29 @@ do
     else
         props = set(props, 'on', 'false')
     end
-    let node = ViewNode(kind: 'Toggle', key: '', props: props, children: [], events: emptyEvents())
-    registerNode(node)
     if signalValue != null
         let current = onValue
-        attachClickHandler(node) do
+        let handler ClickAction = do
             signalValue!.setValue(!current)
         end
+        let handlerId = registerHandler(handler)
+        let toggleProps = set(props, 'handlerId', handlerId)
+        let events = Events(onClick: handler, onChange: null)
+        let result = ViewNode(kind: 'Toggle', key: '', props: toggleProps, children: [], events: events)
+        registerNode(result)
+        result
     else
         if onChange != null
-            attachClickHandler(node, onChange!)
+            let handler ClickAction = onChange!
+            let handlerId = registerHandler(handler)
+            let toggleProps = set(props, 'handlerId', handlerId)
+            let events = Events(onClick: handler, onChange: null)
+            let result = ViewNode(kind: 'Toggle', key: '', props: toggleProps, children: [], events: events)
+            registerNode(result)
+            result
         else
+            let node = ViewNode(kind: 'Toggle', key: '', props: props, children: [], events: emptyEvents())
+            registerNode(node)
             node
         end
     end
@@ -459,19 +517,30 @@ do
         else
             segProps = set(segProps, 'selected', 'false')
         end
-        let segNode = ViewNode(kind: 'Segment', key: label, props: segProps, children: [], events: emptyEvents())
-        registerNode(segNode)
         if signalValue != null
             let chosen = label
-            attachClickHandler(segNode) do
+            let handler ClickAction = do
                 signalValue!.setValue(chosen)
             end
+            let handlerId = registerHandler(handler)
+            let handledProps = set(segProps, 'handlerId', handlerId)
+            let events = Events(onClick: handler, onChange: null)
+            let result = ViewNode(kind: 'Segment', key: label, props: handledProps, children: [], events: events)
+            registerNode(result)
         else
             if onChange != null
                 let chosen = label
-                attachClickHandler(segNode) do
+                let handler ClickAction = do
                     onChange!(chosen)
                 end
+                let handlerId = registerHandler(handler)
+                let handledProps = set(segProps, 'handlerId', handlerId)
+                let events = Events(onClick: handler, onChange: null)
+                let result = ViewNode(kind: 'Segment', key: label, props: handledProps, children: [], events: events)
+                registerNode(result)
+            else
+                let segNode = ViewNode(kind: 'Segment', key: label, props: segProps, children: [], events: emptyEvents())
+                registerNode(segNode)
             end
         end
         i = i + 1
@@ -687,6 +756,32 @@ test TextInput
     end
 end
 
+test TextArea
+    it 'creates a textarea with placeholder'
+        let t = TextArea('Body')
+        assert.equals(t.kind, 'TextArea')
+        assert.equals(getProp(t, 'placeholder'), 'Body')
+    end
+    it 'accepts rows'
+        let t = TextArea('Body', rows: 6)
+        assert.equals(getIntProp(t, 'rows')!, 6)
+    end
+    it 'binds signal value and change handler'
+        clearHandlers()
+        installViewEventBridge()
+        var body = createSignal('hello')
+        let t = TextArea('Body', signalValue: body)
+        assert.equals(getProp(t, 'value'), 'hello')
+        assert.equals(hasProp(t, 'changeHandlerId'), true)
+        events.emit('view:input', {
+            id: getIntProp(t, 'changeHandlerId')!
+            value: 'updated'
+        })
+        assert.equals(value(body), 'updated')
+        clearHandlers()
+    end
+end
+
 test View
     it 'builds a View node containing its children'
         let n = View do
@@ -735,6 +830,15 @@ test Button
         assert.equals(n.kind, 'Button')
         assert.equals(getProp(n, 'text'), 'Save')
     end
+    it 'registers an inline click handler inside a container'
+        let n = VStack do
+            Button('Save', onClick: do
+                print('clicked')
+            end)
+        end
+        assert.equals(childCount(n), 1)
+        assert.equals(getChild(n, 0).events.onClick?, true)
+    end
 end
 
 test Spacer
@@ -759,6 +863,15 @@ test Toggle
         assert.equals(n.kind, 'Toggle')
         assert.equals(getProp(n, 'on'), 'true')
     end
+    it 'registers an inline change handler inside a container'
+        let n = VStack do
+            Toggle(isOn: true, onChange: do
+                print('changed')
+            end)
+        end
+        assert.equals(childCount(n), 1)
+        assert.equals(getChild(n, 0).events.onClick?, true)
+    end
 end
 
 test Divider
@@ -779,6 +892,16 @@ test SegmentedControl
         assert.equals(getProp(n, 'value'), 'Day')
         assert.equals(childCount(n), 2)
         assert.equals(getChild(n, 0).kind, 'Segment')
+    end
+    it 'registers segment handlers once inside the control frame'
+        let n = SegmentedControl(options: [
+            'Day'
+            'Week'
+        ], selected: 'Day', onChange: do with selected String
+            print(selected)
+        end)
+        assert.equals(getChild(n, 0).events.onClick?, true)
+        assert.equals(getChild(n, 1).events.onClick?, true)
     end
 end
 
