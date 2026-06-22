@@ -2,7 +2,7 @@ use std.array
 
 use { ViewNode, clearHandlers, clearTreeStack, emptyEvents, getProp, installViewEventBridge, VStack, Label, TextInput } from view
 
-use { hasDirtySignals, clearDirty, onSignalChange, clearOnSignalChange, resetHooks, enterSsrMode, exitSsrMode, saveHookState, restoreHookState, setRenderingActive, renderingActive, commitPendingWrites } from signal
+use { hasDirtySignals, clearDirty, onSignalChange, clearOnSignalChange, resetHooks, enterSsrMode, exitSsrMode, saveHookState, restoreHookState, setRenderingActive, renderingActive, commitPendingWrites, flushPendingPollStarts } from signal
 
 use { DiffOp, diffTrees } from diff
 
@@ -202,6 +202,7 @@ do
         setRenderingActive(true)
         let tree = mountedApp!()
         setRenderingActive(false)
+        flushPendingPollStarts()
         let initialOps = [
             DiffOp(action: 'replace', path: '', node: tree, props: null)
         ]
@@ -286,6 +287,7 @@ do
             end
         end
         setRenderingActive(false)
+        flushPendingPollStarts()
         if renderRequested
             renderRequested = false
             requestRender()

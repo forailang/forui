@@ -11,7 +11,9 @@ platform adapter. The adapter receives a diff list after every signal change.
 
 **Signals** — reactive values. Create with `useSignal(initialValue)`. Mutate with
 `setValue(sig, newValue)` (requires `mutable` param). Read with `sig.value`.
-Status helpers: `isLoading(sig)`, `isLoaded(sig)`, `isError(sig)`.
+Status helpers: `isLoading(sig)`, `isLoaded(sig)`, `isError(sig)`. Use
+`usePoll(intervalMs, active, handler)` for page-local refresh loops; polling
+starts after the interval, does not overlap handlers, and is skipped during SSR.
 
 **View tree** — build UI by returning `ViewNode` from your render function.
 Primitives: `Label`, `Paragraph`, `Heading`, `Button`, `TextInput`, `TextArea`,
@@ -47,7 +49,7 @@ for direct calls and UFCS chains.
 
 ```fai
 use * from Forui.view
-use { useSignal, isLoading, isError, setValue, reload } from Forui.signal
+use { useSignal, usePoll, isLoading, isError, setValue, reload, value } from Forui.signal
 use { navigate, routeParam, Router, Route, Link } from Forui.router
 use { mount } from Forui
 ```

@@ -362,19 +362,21 @@ def setValue
     @param newValue $T
     @return Void
 do
-    if renderingActive()
-        signal.hasPending = true
-        signal.pendingValue = copy(newValue)
-        signal.pendingStatus = SignalStatus.loaded
-        signal.pendingError = null
-        recordPending(signal.id)
-    else
-        signal._value = copy(newValue)
-        signal.status = SignalStatus.loaded
-        signal.error = null
+    if signalIsActive(signal.id)
+        if renderingActive()
+            signal.hasPending = true
+            signal.pendingValue = copy(newValue)
+            signal.pendingStatus = SignalStatus.loaded
+            signal.pendingError = null
+            recordPending(signal.id)
+        else
+            signal._value = copy(newValue)
+            signal.status = SignalStatus.loaded
+            signal.error = null
+        end
+        markDirty(signal.id)
+        notifyChange()
     end
-    markDirty(signal.id)
-    notifyChange()
 end
 
 # Mark the signal as loading. Clears error. Marks dirty.
@@ -382,18 +384,20 @@ def setLoading
     @param signal Signal, mutable
     @return Void
 do
-    if renderingActive()
-        signal.hasPending = true
-        signal.pendingValue = copy(signal._value)
-        signal.pendingStatus = SignalStatus.loading
-        signal.pendingError = null
-        recordPending(signal.id)
-    else
-        signal.status = SignalStatus.loading
-        signal.error = null
+    if signalIsActive(signal.id)
+        if renderingActive()
+            signal.hasPending = true
+            signal.pendingValue = copy(signal._value)
+            signal.pendingStatus = SignalStatus.loading
+            signal.pendingError = null
+            recordPending(signal.id)
+        else
+            signal.status = SignalStatus.loading
+            signal.error = null
+        end
+        markDirty(signal.id)
+        notifyChange()
     end
-    markDirty(signal.id)
-    notifyChange()
 end
 
 # Set the signal's value and mark as loaded. Clears error. Marks dirty.
@@ -402,19 +406,21 @@ def setLoaded
     @param newValue $T
     @return Void
 do
-    if renderingActive()
-        signal.hasPending = true
-        signal.pendingValue = copy(newValue)
-        signal.pendingStatus = SignalStatus.loaded
-        signal.pendingError = null
-        recordPending(signal.id)
-    else
-        signal._value = copy(newValue)
-        signal.status = SignalStatus.loaded
-        signal.error = null
+    if signalIsActive(signal.id)
+        if renderingActive()
+            signal.hasPending = true
+            signal.pendingValue = copy(newValue)
+            signal.pendingStatus = SignalStatus.loaded
+            signal.pendingError = null
+            recordPending(signal.id)
+        else
+            signal._value = copy(newValue)
+            signal.status = SignalStatus.loaded
+            signal.error = null
+        end
+        markDirty(signal.id)
+        notifyChange()
     end
-    markDirty(signal.id)
-    notifyChange()
 end
 
 # Mark the signal as errored with a message. Marks dirty.
@@ -423,18 +429,20 @@ def setError
     @param message String
     @return Void
 do
-    if renderingActive()
-        signal.hasPending = true
-        signal.pendingValue = copy(signal._value)
-        signal.pendingStatus = SignalStatus.error
-        signal.pendingError = message
-        recordPending(signal.id)
-    else
-        signal.status = SignalStatus.error
-        signal.error = message
+    if signalIsActive(signal.id)
+        if renderingActive()
+            signal.hasPending = true
+            signal.pendingValue = copy(signal._value)
+            signal.pendingStatus = SignalStatus.error
+            signal.pendingError = message
+            recordPending(signal.id)
+        else
+            signal.status = SignalStatus.error
+            signal.error = message
+        end
+        markDirty(signal.id)
+        notifyChange()
     end
-    markDirty(signal.id)
-    notifyChange()
 end
 
 # ── Status Helpers ──────────────────────────────────────────────────
@@ -548,6 +556,15 @@ test setValue
         assert.equals(s.value()[0], 1)
         clearDirty()
     end
+    it 'ignores writes to an unregistered signal'
+        clearDirty()
+        var s = createSignal(0)
+        unregisterSignal(s)
+        s.setValue(99)
+        assert.equals(s.value(), 0)
+        assert.equals(isSignalDirty(s.id), false)
+        clearDirty()
+    end
 end
 
 test setLoading
@@ -559,6 +576,15 @@ test setLoading
         assert.equals(s.value(), 42)
         assert.equals(s.error, null)
         assert.equals(isSignalDirty(s.id), true)
+        clearDirty()
+    end
+    it 'ignores loading updates to an unregistered signal'
+        clearDirty()
+        var s = createSignal(42)
+        unregisterSignal(s)
+        s.setLoading()
+        assert.equals(s.status, SignalStatus.initial)
+        assert.equals(isSignalDirty(s.id), false)
         clearDirty()
     end
 end
@@ -587,6 +613,16 @@ test setLoaded
         assert.equals(s.value()[0], 1)
         clearDirty()
     end
+    it 'ignores loaded updates to an unregistered signal'
+        clearDirty()
+        var s = createSignal(0)
+        unregisterSignal(s)
+        s.setLoaded(99)
+        assert.equals(s.value(), 0)
+        assert.equals(s.status, SignalStatus.initial)
+        assert.equals(isSignalDirty(s.id), false)
+        clearDirty()
+    end
 end
 
 test setError
@@ -598,6 +634,16 @@ test setError
         assert.equals(s.error, 'network failure')
         assert.equals(s.value(), 0)
         assert.equals(isSignalDirty(s.id), true)
+        clearDirty()
+    end
+    it 'ignores errors on an unregistered signal'
+        clearDirty()
+        var s = createSignal(0)
+        unregisterSignal(s)
+        s.setError('network failure')
+        assert.equals(s.status, SignalStatus.initial)
+        assert.equals(s.error, null)
+        assert.equals(isSignalDirty(s.id), false)
         clearDirty()
     end
 end

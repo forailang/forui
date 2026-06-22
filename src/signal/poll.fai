@@ -1,0 +1,538 @@
+use std.array
+
+# A component poll callback. The callback runs outside render, so it usually
+# mutates signals or calls `reload()` to schedule a normal signal-driven render.
+type def PollHandler
+    @return Void
+end
+
+type PollSlot
+    intervalMs Int
+    active Bool
+    handler PollHandler
+    generation Int
+    running Bool
+    inHandler Bool
+    handlerGeneration Int
+    restartPending Bool
+    startPending Bool
+end
+
+var pollHooks PollSlot[] = []
+
+var pollIndex = 0
+
+var nextPollGeneration = 1
+
+# Reset poll call-order tracking before a render pass.
+def resetPollHooks
+    @return Void
+do
+    pollIndex = 0
+end
+
+# Invalidate route-local poll loops. Running tasks observe the generation change
+# the next time they wake or finish a handler.
+def clearPollHooks
+    @return Void
+do
+    var i = 0
+    while i < length(pollHooks)
+        var slot = pollHooks[i]
+        if slot.active
+            slot.generation = nextPollGeneration
+            nextPollGeneration = nextPollGeneration + 1
+        end
+        slot.active = false
+        slot.restartPending = false
+        if slot.startPending
+            slot.running = false
+        end
+        slot.startPending = false
+        pollHooks[i] = slot
+        i = i + 1
+    end
+    pollIndex = 0
+end
+
+# True when a detached poll task still owns the active slot generation.
+def pollSlotIsCurrent
+    @param slotId Int
+    @param generation Int
+    @return Bool
+do
+    if slotId < 0
+        false
+    else
+        if slotId >= length(pollHooks)
+            false
+        else
+            let slot = pollHooks[slotId]
+            if slot.active
+                slot.generation == generation
+            else
+                false
+            end
+        end
+    end
+end
+
+# Queue a finite poll tick from its own task boundary.
+def schedulePollRun
+    @param slotId Int
+    @param generation Int
+    @return Void
+do
+    nowait runPoll(slotId, generation)
+end
+
+# Start poll tasks that were registered while a render pass was active.
+def flushPendingPollStarts
+    @return Void
+do
+    var i = 0
+    while i < length(pollHooks)
+        var slot = pollHooks[i]
+        if slot.active
+            if slot.running
+                if slot.startPending
+                    if !slot.inHandler
+                        let generation = slot.generation
+                        slot.startPending = false
+                        pollHooks[i] = slot
+                        nowait schedulePollRun(i, generation)
+                    end
+                end
+            end
+        end
+        i = i + 1
+    end
+end
+
+# Complete one poll task and either schedule the next finite tick or mark the
+# slot idle.
+def finishPollRun
+    @param slotId Int
+    @param generation Int
+    @return Void
+do
+    if slotId >= 0
+        if slotId < length(pollHooks)
+            var slot = pollHooks[slotId]
+            if slot.generation == generation
+                if slot.active
+                    let nextGeneration = slot.generation
+                    pollHooks[slotId] = slot
+                    nowait schedulePollRun(slotId, nextGeneration)
+                else
+                    slot.running = false
+                    slot.restartPending = false
+                    slot.startPending = false
+                    pollHooks[slotId] = slot
+                end
+            else
+                if slot.active
+                    if slot.restartPending
+                        let nextGeneration = slot.generation
+                        slot.restartPending = false
+                        slot.running = true
+                        pollHooks[slotId] = slot
+                        nowait schedulePollRun(slotId, nextGeneration)
+                    end
+                else
+                    slot.running = false
+                    slot.restartPending = false
+                    slot.startPending = false
+                    pollHooks[slotId] = slot
+                end
+            end
+        end
+    end
+end
+
+# Run one finite poll tick for a slot generation. The handler call happens only
+# after the sleep, and the next tick is scheduled only after the handler returns.
+def runPoll
+    @param slotId Int
+    @param generation Int
+    @return Void
+do
+    if pollSlotIsCurrent(slotId, generation)
+        let interval = pollHooks[slotId].intervalMs
+        sleep(interval)
+        if pollSlotIsCurrent(slotId, generation)
+            var before = pollHooks[slotId]
+            before.inHandler = true
+            before.handlerGeneration = generation
+            pollHooks[slotId] = before
+            let handler = before.handler
+            handler()
+            if slotId < length(pollHooks)
+                var after = pollHooks[slotId]
+                if after.handlerGeneration == generation
+                    after.inHandler = false
+                    after.handlerGeneration = 0
+                    pollHooks[slotId] = after
+                end
+            end
+        end
+    end
+    finishPollRun(slotId, generation)
+end
+
+# Run `handler` repeatedly while `active` is true. This follows the same
+# top-level call-order rule as useSignal.
+def usePoll
+    @param intervalMs Int
+    @param active Bool
+    @param handler PollHandler
+    @return Void
+do
+    let slotId = pollIndex
+    pollIndex = pollIndex + 1
+    if !ssrMode
+        while slotId >= length(pollHooks)
+            let slot = PollSlot(intervalMs: intervalMs, active: false, handler: handler, generation: 0, running: false, inHandler: false, handlerGeneration: 0, restartPending: false, startPending: false)
+            pollHooks = array.append(pollHooks, slot)
+        end
+        var slot = pollHooks[slotId]
+        let intervalChanged = slot.intervalMs != intervalMs
+        var generationChanged = false
+        slot.handler = handler
+        slot.intervalMs = intervalMs
+        if active
+            var shouldAdvanceGeneration = false
+            if !slot.active
+                shouldAdvanceGeneration = true
+            else
+                if intervalChanged
+                    shouldAdvanceGeneration = true
+                end
+            end
+            if shouldAdvanceGeneration
+                slot.generation = nextPollGeneration
+                nextPollGeneration = nextPollGeneration + 1
+                generationChanged = true
+            end
+            slot.active = true
+            if slot.running
+                if generationChanged
+                    if slot.inHandler
+                        slot.restartPending = true
+                    else
+                        slot.restartPending = false
+                        slot.startPending = true
+                    end
+                end
+                pollHooks[slotId] = slot
+            else
+                slot.running = true
+                slot.restartPending = false
+                slot.startPending = true
+                pollHooks[slotId] = slot
+            end
+        else
+            if slot.active
+                slot.generation = nextPollGeneration
+                nextPollGeneration = nextPollGeneration + 1
+            end
+            slot.active = false
+            slot.restartPending = false
+            if slot.startPending
+                slot.running = false
+            end
+            slot.startPending = false
+            pollHooks[slotId] = slot
+        end
+    end
+end
+
+var pollHandlerCount = 0
+
+var pollConcurrentHandlers = 0
+
+var pollMaxConcurrentHandlers = 0
+
+# Increment the poll test counter.
+def pollMarker
+    @return Void
+do
+    pollHandlerCount = pollHandlerCount + 1
+end
+
+# Simulate a slow poll handler while tracking overlap.
+def slowPollMarker
+    @return Void
+do
+    pollConcurrentHandlers = pollConcurrentHandlers + 1
+    if pollConcurrentHandlers > pollMaxConcurrentHandlers
+        pollMaxConcurrentHandlers = pollConcurrentHandlers
+    end
+    sleep(1)
+    pollHandlerCount = pollHandlerCount + 1
+    pollConcurrentHandlers = pollConcurrentHandlers - 1
+end
+
+test resetPollHooks
+    it 'rewinds pollIndex to zero'
+        pollIndex = 4
+        resetPollHooks()
+        assert.equals(pollIndex, 0)
+    end
+end
+
+test clearPollHooks
+    it 'invalidates active poll slots and resets the index'
+        clearPollHooks()
+        pollHooks = []
+        resetPollHooks()
+        let generation = nextPollGeneration
+        nextPollGeneration = nextPollGeneration + 1
+        pollHooks = [PollSlot(intervalMs: 100, active: true, handler: pollMarker, generation: generation, running: true, inHandler: false, handlerGeneration: 0, restartPending: false, startPending: true)]
+        assert.equals(pollHooks[0].active, true)
+        pollIndex = 8
+        clearPollHooks()
+        assert.equals(pollIndex, 0)
+        assert.equals(pollHooks[0].active, false)
+        assert.equals(pollHooks[0].running, false)
+        assert.equals(pollHooks[0].generation == generation, false)
+    end
+    afterEach
+        clearPollHooks()
+    end
+end
+
+test pollSlotIsCurrent
+    it 'requires an active slot with the matching generation'
+        clearPollHooks()
+        pollHooks = []
+        let generation = nextPollGeneration
+        nextPollGeneration = nextPollGeneration + 1
+        pollHooks = [PollSlot(intervalMs: 20, active: true, handler: pollMarker, generation: generation, running: false, inHandler: false, handlerGeneration: 0, restartPending: false, startPending: false)]
+        assert.equals(pollSlotIsCurrent(0, generation), true)
+        assert.equals(pollSlotIsCurrent(0, generation + 1), false)
+        assert.equals(pollSlotIsCurrent(1, generation), false)
+    end
+    afterEach
+        clearPollHooks()
+    end
+end
+
+test schedulePollRun
+    it 'is safe to call for an inactive slot'
+        clearPollHooks()
+        pollHooks = []
+        schedulePollRun(0, 1)
+        assert.equals(true, true)
+    end
+end
+
+test flushPendingPollStarts
+    it 'keeps pending starts queued while a handler is active'
+        clearPollHooks()
+        pollHooks = []
+        pollHooks = [PollSlot(intervalMs: 20, active: true, handler: pollMarker, generation: 2, running: true, inHandler: true, handlerGeneration: 2, restartPending: false, startPending: true)]
+        flushPendingPollStarts()
+        assert.equals(pollHooks[0].startPending, true)
+    end
+    afterEach
+        clearPollHooks()
+    end
+end
+
+test finishPollRun
+    it 'marks an inactive canceled slot idle'
+        clearPollHooks()
+        pollHooks = []
+        pollHooks = [PollSlot(intervalMs: 20, active: false, handler: pollMarker, generation: 2, running: true, inHandler: false, handlerGeneration: 0, restartPending: false, startPending: false)]
+        finishPollRun(0, 1)
+        assert.equals(pollHooks[0].running, false)
+    end
+    afterEach
+        clearPollHooks()
+    end
+end
+
+test usePoll
+    it 'allocates one poll slot and advances the poll index'
+        clearPollHooks()
+        pollHooks = []
+        resetPollHooks()
+        usePoll(100, false, pollMarker)
+        assert.equals(array.length(pollHooks), 1)
+        assert.equals(pollIndex, 1)
+    end
+    it 'reuses a poll slot on rerender with the same hook order'
+        clearPollHooks()
+        pollHooks = []
+        resetPollHooks()
+        usePoll(100, false, pollMarker)
+        resetPollHooks()
+        usePoll(200, false, pollMarker)
+        assert.equals(array.length(pollHooks), 1)
+        assert.equals(pollHooks[0].intervalMs, 200)
+        assert.equals(pollIndex, 1)
+    end
+    it 'records no poll slot while SSR mode is active'
+        clearPollHooks()
+        pollHooks = []
+        resetPollHooks()
+        enterSsrMode()
+        usePoll(1, true, pollMarker)
+        assert.equals(array.length(pollHooks), 0)
+        assert.equals(pollIndex, 1)
+        exitSsrMode()
+    end
+    it 'does not call the handler synchronously'
+        clearPollHooks()
+        pollHooks = []
+        pollHandlerCount = 0
+        resetPollHooks()
+        setRenderingActive(true)
+        usePoll(50, true, pollMarker)
+        assert.equals(pollHooks[0].startPending, true)
+        assert.equals(pollHandlerCount, 0)
+        setRenderingActive(false)
+    end
+    it 'calls the handler after the interval'
+        clearPollHooks()
+        pollHooks = []
+        pollHandlerCount = 0
+        resetPollHooks()
+        setRenderingActive(true)
+        usePoll(1, true, pollMarker)
+        setRenderingActive(false)
+        flushPendingPollStarts()
+        var waited = 0
+        var waiting = true
+        while waiting
+            if pollHandlerCount == 0
+                if waited < 5
+                    sleep(1)
+                    waited = waited + 1
+                else
+                    waiting = false
+                end
+            else
+                waiting = false
+            end
+        end
+        assert.equals(pollHandlerCount > 0, true)
+    end
+    it 'stops future ticks when active becomes false'
+        clearPollHooks()
+        pollHooks = []
+        pollHandlerCount = 0
+        resetPollHooks()
+        setRenderingActive(true)
+        usePoll(1, true, pollMarker)
+        setRenderingActive(false)
+        flushPendingPollStarts()
+        var waited = 0
+        var waiting = true
+        while waiting
+            if pollHandlerCount == 0
+                if waited < 5
+                    sleep(1)
+                    waited = waited + 1
+                else
+                    waiting = false
+                end
+            else
+                waiting = false
+            end
+        end
+        resetPollHooks()
+        setRenderingActive(true)
+        usePoll(1, false, pollMarker)
+        setRenderingActive(false)
+        flushPendingPollStarts()
+        let stoppedAt = pollHandlerCount
+        sleep(2)
+        assert.equals(pollHandlerCount, stoppedAt)
+    end
+    it 'restarts a sleeping loop with a changed interval'
+        clearPollHooks()
+        pollHooks = []
+        pollHandlerCount = 0
+        resetPollHooks()
+        setRenderingActive(true)
+        usePoll(5, true, pollMarker)
+        setRenderingActive(false)
+        flushPendingPollStarts()
+        resetPollHooks()
+        setRenderingActive(true)
+        usePoll(1, true, pollMarker)
+        setRenderingActive(false)
+        flushPendingPollStarts()
+        var waited = 0
+        var waiting = true
+        while waiting
+            if pollHandlerCount == 0
+                if waited < 4
+                    sleep(1)
+                    waited = waited + 1
+                else
+                    waiting = false
+                end
+            else
+                waiting = false
+            end
+        end
+        assert.equals(pollHandlerCount > 0, true)
+    end
+    afterEach
+        clearPollHooks()
+        pollHandlerCount = 0
+        exitSsrMode()
+        setRenderingActive(false)
+    end
+end
+
+test runPoll
+    it 'does not overlap a slow handler with itself'
+        clearPollHooks()
+        pollHooks = []
+        pollHandlerCount = 0
+        pollConcurrentHandlers = 0
+        pollMaxConcurrentHandlers = 0
+        resetPollHooks()
+        setRenderingActive(true)
+        usePoll(1, true, slowPollMarker)
+        setRenderingActive(false)
+        flushPendingPollStarts()
+        sleep(4)
+        clearPollHooks()
+        sleep(2)
+        assert.equals(pollHandlerCount > 0, true)
+        assert.equals(pollMaxConcurrentHandlers, 1)
+    end
+    afterEach
+        clearPollHooks()
+        pollHandlerCount = 0
+        pollConcurrentHandlers = 0
+        pollMaxConcurrentHandlers = 0
+        setRenderingActive(false)
+    end
+end
+
+test pollMarker
+    it 'increments the poll handler counter'
+        pollHandlerCount = 0
+        pollMarker()
+        pollMarker()
+        assert.equals(pollHandlerCount, 2)
+    end
+end
+
+test slowPollMarker
+    it 'tracks concurrent handler count while running'
+        pollHandlerCount = 0
+        pollConcurrentHandlers = 0
+        pollMaxConcurrentHandlers = 0
+        slowPollMarker()
+        assert.equals(pollHandlerCount, 1)
+        assert.equals(pollConcurrentHandlers, 0)
+        assert.equals(pollMaxConcurrentHandlers, 1)
+    end
+end

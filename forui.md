@@ -315,6 +315,46 @@ tasks.setError('Network error')   # mark error
 tasks.reload()                    # re-run the loader
 ```
 
+### Polling
+
+`usePoll(intervalMs, active, handler)` repeats page-local work while `active` is
+true. Call it at the top level of a component function, in the same stable order
+as `useSignal`.
+
+The first handler call happens after `intervalMs`, not during render or
+immediately after mount. Forui waits for a handler to finish before scheduling
+the next interval, so slow handlers do not overlap. Polling is disabled during
+SSR and `testMount`; route cleanup invalidates page-local poll loops.
+
+```fai
+var tasks = useSignal([]) do
+  getTasks(sessionToken())
+end
+var autoRefresh = useSignal(true)
+
+usePoll(5000, autoRefresh.value()) do
+  tasks.reload()
+end
+```
+
+```fai
+var unread = useSignal(0)
+
+usePoll(15000, true) do
+  unread.setValue(fetchUnreadCount())
+end
+```
+
+```fai
+use std.time
+
+var nowMs = useSignal(time.now())
+
+usePoll(1000, true) do
+  nowMs.setValue(time.now())
+end
+```
+
 ### Loading states in UI
 
 ```fai

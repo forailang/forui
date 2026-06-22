@@ -28,6 +28,7 @@ def resetHooks
     @return Void
 do
     hookIndex = 0
+    resetPollHooks()
 end
 
 # Clear all hook signals. Call on route changes so the new page gets
@@ -39,6 +40,7 @@ do
         unregisterSignal(signal)
     end
     hookSignals = []
+    clearPollHooks()
 end
 
 # The primary way to create reactive state in a component. Returns a
@@ -118,9 +120,11 @@ def reload
     @param signal Signal, mutable
     @return Void
 do
-    if signal.loader != null
-        signal.status = SignalStatus.loading
-        nowait doLoad(signal.id, signal.loader!)
+    if signalIsActive(signal.id)
+        if signal.loader != null
+            signal.status = SignalStatus.loading
+            nowait doLoad(signal.id, signal.loader!)
+        end
     end
 end
 
@@ -168,8 +172,10 @@ end
 test resetHooks
     it 'rewinds hookIndex to zero'
         hookIndex = 42
+        pollIndex = 42
         resetHooks()
         assert.equals(hookIndex, 0)
+        assert.equals(pollIndex, 0)
     end
 end
 
@@ -187,6 +193,14 @@ test clearHookSignals
         assert.equals(registeredSignalCount(), before + 2)
         clearHookSignals()
         assert.equals(registeredSignalCount(), before)
+    end
+    it 'invalidates route-local poll hooks'
+        resetHooks()
+        pollHooks = [PollSlot(intervalMs: 100, active: true, handler: pollMarker, generation: 1, running: false, inHandler: false, handlerGeneration: 0, restartPending: false, startPending: false)]
+        assert.equals(pollHooks[0].active, true)
+        clearHookSignals()
+        assert.equals(pollHooks[0].active, false)
+        assert.equals(pollIndex, 0)
     end
 end
 
@@ -257,6 +271,17 @@ test reload
         var s = createSignal(0, reloadMarkerLoader)
         reload(s)
         assert.equals(reloadLoaderRan, true)
+        exitSsrMode()
+    end
+    it 'ignores reloads on an unregistered signal'
+        resetHooks()
+        enterSsrMode()
+        reloadLoaderRan = false
+        var s = createSignal(0, reloadMarkerLoader)
+        unregisterSignal(s)
+        reload(s)
+        assert.equals(reloadLoaderRan, false)
+        assert.equals(s.status, SignalStatus.initial)
         exitSsrMode()
     end
 end

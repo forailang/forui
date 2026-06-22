@@ -69,7 +69,7 @@ Then import explicitly per file (forui has no wildcard re-exports):
 ```fai
 use { VStack, HStack, Label, Button, TextInput, TextArea } from Forui.view
 use { padding, background, fontSize, foreground } from Forui.view
-use { useSignal, setValue, reload } from Forui.signal
+use { useSignal, usePoll, setValue, reload, value } from Forui.signal
 use { Router, Route, Link, navigate, routeParam } from Forui.router
 use { mount, renderSSR } from Forui
 use { htmlRender, initWebRouter } from HtmlForui
@@ -115,6 +115,40 @@ and `setError(msg)` give explicit control when you need it.
 
 > Signals must be declared at the top of a component function, not inside
 > a conditional or loop — the framework tracks them by call order.
+
+`usePoll(intervalMs, active, handler)` repeats page-local work through the same
+signal-driven render loop. The first call happens after the interval, handlers
+never overlap, polling is skipped during SSR and `testMount`, and route cleanup
+invalidates old page polls.
+
+```fai
+var tasks = useSignal([]) do
+    fetchTasks()
+end
+var autoRefresh = useSignal(true)
+
+usePoll(5000, autoRefresh.value()) do
+    tasks.reload()
+end
+```
+
+```fai
+var unread = useSignal(0)
+
+usePoll(15000, true) do
+    unread.setValue(fetchUnreadCount())
+end
+```
+
+```fai
+use std.time
+
+var nowMs = useSignal(time.now())
+
+usePoll(1000, true) do
+    nowMs.setValue(time.now())
+end
+```
 
 ## Components: containers, leaves, modifiers
 

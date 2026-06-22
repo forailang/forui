@@ -7,7 +7,7 @@ when it changes.
 Most app components import the signal helpers they use directly:
 
 ```fai
-use { useSignal, isLoading, isLoaded, isError, setValue, reload } from Forui.signal
+use { useSignal, usePoll, isLoading, isLoaded, isError, setValue, reload, value } from Forui.signal
 ```
 
 ## Component State
@@ -73,6 +73,48 @@ after a mutation that changes server-backed data.
 Button('Refresh', onClick: do
     tasks.reload()
 end)
+```
+
+## Polling
+
+Use `usePoll(intervalMs, active, handler)` near the top of a component to repeat
+page-local work while `active` is true. It follows the same call-order rule as
+`useSignal`: keep every `usePoll` call at component top level, not inside an
+`if`, `for`, or nested callback.
+
+The first handler call happens after `intervalMs`, not during render. Forui waits
+for a handler to finish before scheduling the next interval, so slow handlers do
+not overlap with themselves. During SSR and `testMount`, poll handlers are not
+started. Route cleanup invalidates page-local poll loops, and stale signal writes
+from old handlers are ignored after their hook signals are unregistered.
+
+```fai
+var tasks = useSignal([]) do
+    getTasks()
+end
+var autoRefresh = useSignal(true)
+
+usePoll(5000, autoRefresh.value()) do
+    tasks.reload()
+end
+```
+
+```fai
+var unread = useSignal(0)
+
+usePoll(15000, true) do
+    unread.setValue(fetchUnreadCount())
+end
+```
+
+```fai
+use std.time
+
+var nowMs = useSignal(time.now())
+
+usePoll(1000, true) do
+    nowMs.setValue(time.now())
+end
 ```
 
 ## Lower-Level Helpers
