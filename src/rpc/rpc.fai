@@ -246,6 +246,56 @@ do
     '{"ok":false,"badRequest":true,"error":"bad request"}'
 end
 
+# ── Pre-dispatch hook chain (fai plan 133 phase 4) ──────────────────
+#
+# Cross-cutting concerns that must be able to REJECT a call before
+# dispatch (rate limiting, request-id stamping, audit) register here.
+# Hooks run in registration order after identity resolution and before
+# the @auth gate; the first non-'' return answers the request without
+# dispatching. Authn/authz do NOT belong here — they are per-endpoint
+# @auth policy. Response-side concerns use the rpc:beforeCall /
+# rpc:afterCall / rpc:error events.
+
+# A pre-dispatch hook: return '' to continue, or an envelope
+# (rpcError / rpcRateLimited / rpcBadRequest...) to answer immediately.
+type def DispatchHook
+    @param fnName String
+    @param ctx Dictionary
+    @return String
+end
+
+var dispatchHooks DispatchHook[] = []
+
+# Register a pre-dispatch hook (call at startup, order matters).
+def beforeDispatch
+    @param hook DispatchHook
+    @return Void
+do
+    dispatchHooks = array.append(dispatchHooks, hook)
+end
+
+# Run the hook chain; the first rejection wins.
+def runDispatchHooks
+    @param fnName String
+    @param ctx Dictionary
+    @return String
+do
+    var failed = ''
+    for hook in dispatchHooks
+        if failed == ''
+            failed = hook(fnName, ctx)
+        end
+    end
+    failed
+end
+
+# The 429 envelope for rate-limiting hooks. Fixed text by design.
+def rpcRateLimited
+    @return String
+do
+    '{"ok":false,"rateLimited":true,"error":"rate limited"}'
+end
+
 # ── @auth enforcement (fai plan 133 phase 2) ────────────────────────
 #
 # The generated __rpcDispatch calls rpcAuthCheck BEFORE each endpoint
@@ -527,12 +577,14 @@ do
                 nextRequestId = nextRequestId + 1
                 setTaskContextId(requestId)
                 let ctx = rpcBeginRequest(request, requestId)
-                var resultJson = ''
-                try
-                    resultJson = dispatch(fnName, argsJson, ctx)
-                catch e
-                    rpcEndRequest()
-                    throw e
+                var resultJson = runDispatchHooks(fnName, ctx)
+                if resultJson == ''
+                    try
+                        resultJson = dispatch(fnName, argsJson, ctx)
+                    catch e
+                        rpcEndRequest()
+                        throw e
+                    end
                 end
                 var baseResp = server.json(200, '')
                 if resultJson == ''
@@ -544,6 +596,8 @@ do
                         baseResp = server.json(403, resultJson)
                     else if string.startsWith(resultJson, '{"ok":false,"badRequest"')
                         baseResp = server.json(400, resultJson)
+                    else if string.startsWith(resultJson, '{"ok":false,"rateLimited"')
+                        baseResp = server.json(429, resultJson)
                     else if string.startsWith(resultJson, '{"ok":false')
                         baseResp = server.json(200, resultJson)
                     else
@@ -875,5 +929,60 @@ test handleRpcRequestInterfaceGate
         let open = handleRpcRequest(req, '{"functions":[]}', 'h', testDispatch)
         assert.equals(open.status, 200)
         interfaceMode('off')
+    end
+end
+
+test beforeDispatch
+    it 'registers hooks that run in order with first rejection winning'
+        dispatchHooks = []
+        beforeDispatch(passHook)
+        assert.equals(runDispatchHooks('fn', {}), '')
+        beforeDispatch(limitHook)
+        beforeDispatch(passHook)
+        assert.equals(runDispatchHooks('fn', {}), rpcRateLimited())
+        dispatchHooks = []
+    end
+end
+
+test runDispatchHooks
+    it 'passes when no hooks are registered'
+        dispatchHooks = []
+        assert.equals(runDispatchHooks('fn', {}), '')
+    end
+end
+
+test rpcRateLimited
+    it 'is the fixed 429 envelope'
+        assert.equals(rpcRateLimited(), '{"ok":false,"rateLimited":true,"error":"rate limited"}')
+    end
+end
+
+# Hook stubs for the tests above.
+def passHook
+    @param fnName String
+    @param ctx Dictionary
+    @return String
+do
+    ''
+end
+
+test passHook
+    it 'passes'
+        assert.equals(passHook('f', {}), '')
+    end
+end
+
+# Rejecting twin of passHook.
+def limitHook
+    @param fnName String
+    @param ctx Dictionary
+    @return String
+do
+    rpcRateLimited()
+end
+
+test limitHook
+    it 'rejects'
+        assert.equals(limitHook('f', {}), rpcRateLimited())
     end
 end
