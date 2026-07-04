@@ -1,5 +1,7 @@
 use std.array
 
+use std.dictionary
+
 use std.http.server
 
 use std.json
@@ -29,7 +31,7 @@ def serveRpc
     @param port Int
     @param specJson String
     @param specHash String
-    @param dispatch (String, String) -> String
+    @param dispatch (String, String, Dictionary) -> String
     @return String
 do
     print("rpc server starting on port {{port}}")
@@ -108,33 +110,207 @@ do
     unwrap(result, '')
 end
 
-var pendingCookies Cookie[] = []
+# ── Per-request context (fai plan 133) ──────────────────────────────
+#
+# Request state (caller identity, queued cookies) is keyed by the
+# current scheduler task id, NOT held in a bare module global. Under
+# cooperative yield (fai plan 103) two in-flight requests interleave,
+# so a single module-global would bleed one caller's identity into
+# another's handler. `taskId()` is stable across yields within one
+# task and distinct across concurrent tasks, so each request sees only
+# its own entry.
 
-# Pending cookies a remote def has asked to attach to the outgoing
-# response. Drained by handleRpcRequest right before it returns the
-# typed HttpResponse to the host serializer. The single-process
-# server is single-threaded so a module-global is safe; once the
-# runtime grows cooperative-yield, this needs to move into a per-
-# request context.
+# Maps an incoming HTTP request to a caller identity (a session record,
+# a person dict — whatever the app uses), or null when unauthenticated.
+type def IdentityResolver
+    @param request HttpRequest
+    @return Unknown
+end
+
+# Body closure for actAs.
+type def ActAsBody
+    @return Void
+end
+
+var identityResolver IdentityResolver? = null
+
+# The app's registered identity resolver; null until
+# onResolveIdentity is called — every request is unauthenticated
+# until then. (A function-valued initializer would be cleaner than
+# null, but module-var initializers referencing package functions do
+# not survive dependency codegen reachability yet.)
+
+var rpcContexts Dictionary = {}
+
+# Register the app's identity resolver. The framework calls it once
+# per RPC request (cookie/header -> identity-or-null) and the @auth
+# gate consumes the result before any handler body runs. Identity
+# STORAGE stays the app's business (brain's sessions table stays
+# brain's); this seam only moves enforcement into the framework.
+# Call once at server startup, before listening.
+def onResolveIdentity
+    @param resolver IdentityResolver
+    @return Void
+do
+    identityResolver = resolver
+end
+
+var nextRequestId Int = 1
+
+# Context key for the current task: its inherited request-context id
+# (see fai's `taskContextId`). handleRpcRequest stamps a fresh id on
+# its own task per request and the scheduler copies the stamp
+# parent -> child at every spawn, so the framework's helpers, the
+# handler body, and anything the handler spawns — including detached
+# `nowait` work — all report the request they were born under.
+# '-1' = no request context.
+def requestKey
+    @return String
+do
+    toString(taskContextId())
+end
+
+# The current request's resolved caller identity, or null. Handlers
+# call this instead of reading an app module-global. Scoped to the
+# current request's task chain, so overlapping requests cannot observe
+# each other.
+def caller
+    @return Unknown
+do
+    let entry = dictionary.get(rpcContexts, requestKey())
+    if entry?
+        let ctx Dictionary = entry!
+        let identity = dictionary.get(ctx, 'identity')
+        if identity?
+            identity!
+        else
+            null
+        end
+    else
+        null
+    end
+end
+
+# True when the current request has a resolved caller identity.
+def hasCaller
+    @return Bool
+do
+    caller() != null
+end
+
+# Run a closure with an explicit caller identity scoped to the current
+# task — the seam for channel intake (Slack webhooks etc.) where there
+# is no HTTP session to resolve. Replaces app-level "acting person"
+# module-globals. The previous context is restored even when the body
+# throws.
+def actAs
+    @param identity Unknown
+    @param body ActAsBody
+    @return Void
+do
+    let id = nextRequestId
+    nextRequestId = nextRequestId + 1
+    setTaskContextId(id)
+    rpcContexts = dictionary.set(rpcContexts, toString(id), {
+        identity: identity
+    })
+    try
+        body()
+    catch e
+        rpcContexts = dictionary.set(rpcContexts, toString(id), null)
+        throw e
+    end
+    rpcContexts = dictionary.set(rpcContexts, toString(id), null)
+end
+
 # Queue a cookie to attach to the current request's response. Called
 # from `signup`/`login`/`logout` (or any remote def that wants to set
-# a cookie alongside a JSON-encoded result).
+# a cookie alongside a JSON-encoded result). Queued into the current
+# task's request context so overlapping requests cannot leak cookies
+# into each other; outside a request (unit tests) a module-level
+# fallback keeps the helper usable.
 def queueCookie
     @param c Cookie
     @return Void
 do
-    pendingCookies = array.append(pendingCookies, c)
+    let key = requestKey()
+    let entry = dictionary.get(rpcContexts, key)
+    if entry?
+        var ctx Dictionary = entry!
+        var cookies Cookie[] = []
+        let existing = dictionary.get(ctx, 'cookies')
+        if existing?
+            cookies = existing!
+        end
+        cookies = array.append(cookies, c)
+        ctx = dictionary.set(ctx, 'cookies', cookies)
+        rpcContexts = dictionary.set(rpcContexts, key, ctx)
+    else
+        pendingCookies = array.append(pendingCookies, c)
+    end
 end
 
-# Pull and clear the queue. Used by handleRpcRequest after the
-# dispatch returns. Tests can also call this to verify cookies were
-# queued.
+# Pull and clear the current request's queued cookies (context entry
+# first, module fallback otherwise). Used by handleRpcRequest after
+# the dispatch returns; tests can call it to verify queuing.
 def takePendingCookies
     @return Cookie[]
 do
-    let snapshot = pendingCookies
-    pendingCookies = []
-    snapshot
+    var result Cookie[] = []
+    let key = requestKey()
+    let entry = dictionary.get(rpcContexts, key)
+    if entry?
+        var ctx Dictionary = entry!
+        let existing = dictionary.get(ctx, 'cookies')
+        if existing?
+            result = existing!
+            ctx = dictionary.set(ctx, 'cookies', null)
+            rpcContexts = dictionary.set(rpcContexts, key, ctx)
+        end
+    else
+        result = pendingCookies
+        pendingCookies = []
+    end
+    result
+end
+
+var pendingCookies Cookie[] = []
+
+# Fallback cookie queue for calls outside a request context (unit
+# tests, scripts). Real requests use the per-task context above.
+
+# Resolve identity and install the per-request context under the given
+# request id, returning the ctx Dictionary handed to the generated
+# dispatcher (identity + request metadata). handleRpcRequest allocates
+# the id and stamps its own task BEFORE calling this — the stamp must
+# be inline there because a helper call like this one may run as its
+# own (short-lived) child task.
+def rpcBeginRequest
+    @param request HttpRequest
+    @param requestId Int
+    @return Dictionary
+do
+    var identity Unknown = null
+    if identityResolver?
+        let resolve = identityResolver!
+        identity = resolve(request)
+    end
+    let ctx = {
+        identity: identity
+        method: request.method
+        path: request.path
+    }
+    rpcContexts = dictionary.set(rpcContexts, toString(requestId), ctx)
+    ctx
+end
+
+# Clear the current task's request context. (Dictionaries have no
+# remove yet, so this writes a null tombstone; the next request on a
+# recycled task id overwrites it.)
+def rpcEndRequest
+    @return Void
+do
+    rpcContexts = dictionary.set(rpcContexts, requestKey(), null)
 end
 
 # Return a new HttpResponse with `extra` appended onto the existing
@@ -181,7 +357,7 @@ def handleRpcRequest
     @param request HttpRequest
     @param specJson String
     @param specHash String
-    @param dispatch (String, String) -> String
+    @param dispatch (String, String, Dictionary) -> String
     @return HttpResponse
 do
     if request.method == 'GET' and request.path == '/fai/interface'
@@ -195,7 +371,24 @@ do
             if specHash != '' and reqHash != specHash
                 server.json(401, rpcHashMismatch(specHash))
             else
-                let resultJson = dispatch(fnName, argsJson)
+                # Per-request context (plan 133): allocate the request
+                # id and stamp THIS task inline — every task spawned
+                # below (the dispatcher, the handler body, anything the
+                # handler starts) inherits the stamp, so identity
+                # resolves once and is readable via caller() anywhere in
+                # the request without a module-global. Cleared before
+                # the response leaves, even when the dispatcher throws.
+                let requestId = nextRequestId
+                nextRequestId = nextRequestId + 1
+                setTaskContextId(requestId)
+                let ctx = rpcBeginRequest(request, requestId)
+                var resultJson = ''
+                try
+                    resultJson = dispatch(fnName, argsJson, ctx)
+                catch e
+                    rpcEndRequest()
+                    throw e
+                end
                 var baseResp = server.json(200, '')
                 if resultJson == ''
                     baseResp = server.json(404, rpcError('unknown function'))
@@ -206,7 +399,9 @@ do
                         baseResp = server.json(200, rpcOk(resultJson))
                     end
                 end
-                withCookies(baseResp, takePendingCookies())
+                let resp = withCookies(baseResp, takePendingCookies())
+                rpcEndRequest()
+                resp
             end
         else
             server.json(404, rpcError('not found'))
@@ -220,6 +415,7 @@ end
 def testDispatch
     @param fnName String
     @param argsJson String
+    @param ctx Dictionary
     @return String
 do
     if fnName == 'known'
@@ -291,16 +487,121 @@ end
 
 test handleRpcRequest
     it 'dispatches via its internal helpers'
-        assert.equals(testDispatch('known', '[]'), '{"result":"ok","args":[]}')
-        assert.equals(testDispatch('unknown', '[]'), '')
+        assert.equals(testDispatch('known', '[]', {}), '{"result":"ok","args":[]}')
+        assert.equals(testDispatch('unknown', '[]', {}), '')
     end
 end
 
 test testDispatch
     it 'echoes args for known functions'
-        assert.equals(testDispatch('known', '[1,2]'), '{"result":"ok","args":[1,2]}')
+        assert.equals(testDispatch('known', '[1,2]', {}), '{"result":"ok","args":[1,2]}')
     end
     it 'returns empty string for unknown functions'
-        assert.equals(testDispatch('missing', '[]'), '')
+        assert.equals(testDispatch('missing', '[]', {}), '')
+    end
+end
+
+test onResolveIdentity
+    it 'routes identity resolution through the registered resolver'
+        onResolveIdentity(testResolver)
+        let req HttpRequest = from_dict({
+            method: 'POST'
+            path: '/fai/rpc'
+            body: ''
+        })
+        setTaskContextId(9001)
+        let ctx = rpcBeginRequest(req, 9001)
+        assert.isTrue(hasCaller())
+        rpcEndRequest()
+        assert.isFalse(hasCaller())
+        setTaskContextId(0 - 1)
+        identityResolver = null
+    end
+end
+
+test caller
+    it 'is null outside a request context'
+        assert.isTrue(caller() == null)
+    end
+end
+
+test hasCaller
+    it 'is false outside a request context'
+        assert.isFalse(hasCaller())
+    end
+end
+
+test actAs
+    it 'scopes an explicit identity to the body and restores after'
+        var seenInside = false
+        actAs({
+            personId: 7
+        }) do
+            seenInside = hasCaller()
+        end
+        assert.isTrue(seenInside)
+        assert.isFalse(hasCaller())
+    end
+end
+
+test requestKey
+    it 'is stable within one await chain'
+        assert.equals(requestKey(), requestKey())
+    end
+end
+
+test rpcBeginRequest
+    it 'installs identity and metadata for the current task'
+        onResolveIdentity(testResolver)
+        let req HttpRequest = from_dict({
+            method: 'POST'
+            path: '/fai/rpc'
+            body: ''
+        })
+        setTaskContextId(9002)
+        let ctx = rpcBeginRequest(req, 9002)
+        assert.equals(unwrap(getString(ctx, 'method'), ''), 'POST')
+        assert.isTrue(hasCaller())
+        rpcEndRequest()
+        setTaskContextId(0 - 1)
+        identityResolver = null
+    end
+end
+
+test rpcEndRequest
+    it 'clears the context for the current task'
+        onResolveIdentity(testResolver)
+        let req HttpRequest = from_dict({
+            method: 'POST'
+            path: '/fai/rpc'
+            body: ''
+        })
+        setTaskContextId(9003)
+        let ctx = rpcBeginRequest(req, 9003)
+        rpcEndRequest()
+        assert.isFalse(hasCaller())
+        setTaskContextId(0 - 1)
+        identityResolver = null
+    end
+end
+
+# Resolver used by the context tests — always authenticated.
+def testResolver
+    @param request HttpRequest
+    @return Unknown
+do
+    {
+        userId: 42
+    }
+end
+
+test testResolver
+    it 'returns a non-null identity'
+        let req HttpRequest = from_dict({
+            method: 'GET'
+            path: '/'
+            body: ''
+        })
+        assert.isTrue(testResolver(req) != null)
     end
 end

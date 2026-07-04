@@ -713,6 +713,20 @@ test TextInput
         let t = TextInput('Password', inputType: 'password')
         assert.equals(getProp(t, 'inputType'), 'password')
     end
+    it 'binds signal value and change handler'
+        clearHandlers()
+        installViewEventBridge()
+        var name = createSignal('Brian')
+        let t = TextInput('Name', signalValue: name)
+        assert.equals(getProp(t, 'value'), 'Brian')
+        assert.equals(hasProp(t, 'changeHandlerId'), true)
+        events.emit('view:input', {
+            id: getIntProp(t, 'changeHandlerId')!
+            value: 'Updated'
+        })
+        assert.equals(value(name), 'Updated')
+        clearHandlers()
+    end
     it 'no onSubmit param leaves submitHandlerId absent'
         let t = TextInput('Name')
         assert.equals(hasProp(t, 'submitHandlerId'), false)
