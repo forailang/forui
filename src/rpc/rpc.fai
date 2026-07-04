@@ -208,6 +208,12 @@ def actAs
     @param body ActAsBody
     @return Void
 do
+    # Save the caller's context id so a nested actAs — or an actAs used
+    # inside a live request — restores the outer identity when it
+    # returns, instead of leaving the task pointing at this scope's
+    # (now-cleared) id. Without the restore, a subsequent caller() in the
+    # same task reads a dead key and sees null.
+    let prior = taskContextId()
     let id = nextRequestId
     nextRequestId = nextRequestId + 1
     setTaskContextId(id)
@@ -218,9 +224,11 @@ do
         body()
     catch e
         rpcContexts = dictionary.set(rpcContexts, toString(id), null)
+        setTaskContextId(prior)
         throw e
     end
     rpcContexts = dictionary.set(rpcContexts, toString(id), null)
+    setTaskContextId(prior)
 end
 
 var rpcInterfaceMode String = 'off'
@@ -745,6 +753,21 @@ test actAs
             seenInside = hasCaller()
         end
         assert.isTrue(seenInside)
+        assert.isFalse(hasCaller())
+    end
+    it 'restores the outer identity after a nested actAs'
+        actAs(Session(token: 'outer', userId: 1, userName: 'Outer')) do
+            let inner = Session(token: 'inner', userId: 2, userName: 'Inner')
+            actAs(inner) do
+                let c Session = from_dict(caller())
+                assert.equals(c.token, 'inner')
+            end
+            # After the nested scope, the outer identity is back — the
+            # bug this guards against left the task pointing at the
+            # nested (cleared) id, so caller() read null here.
+            let c Session = from_dict(caller())
+            assert.equals(c.token, 'outer')
+        end
         assert.isFalse(hasCaller())
     end
 end
