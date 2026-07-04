@@ -223,6 +223,113 @@ do
     rpcContexts = dictionary.set(rpcContexts, toString(id), null)
 end
 
+# ── @auth enforcement (fai plan 133 phase 2) ────────────────────────
+#
+# The generated __rpcDispatch calls rpcAuthCheck BEFORE each endpoint
+# body. '' = allowed; otherwise a distinguished envelope that
+# handleRpcRequest maps to HTTP 401/403. Messages are fixed strings —
+# no stack, secret, or identity detail can leak through them.
+
+# Boolean policy hook: `@auth session, role: 'admin'` runs the
+# authorizer registered under 'admin' after authentication.
+type def Authorizer
+    @param ctx Dictionary
+    @param argsJson String
+    @return Bool
+end
+
+var authorizerNames String[] = []
+
+var authorizerFns Authorizer[] = []
+
+# Register a named authorizer (call at startup). Re-registering a name
+# replaces its function.
+def authorizer
+    @param name String
+    @param fn Authorizer
+    @return Void
+do
+    var index = 0 - 1
+    var i = 0
+    for existing in authorizerNames
+        if existing == name
+            index = i
+        end
+        i = i + 1
+    end
+    if index >= 0
+        var fns Authorizer[] = []
+        var j = 0
+        for fn2 in authorizerFns
+            if j == index
+                fns = array.append(fns, fn)
+            else
+                fns = array.append(fns, fn2)
+            end
+            j = j + 1
+        end
+        authorizerFns = fns
+    else
+        authorizerNames = array.append(authorizerNames, name)
+        authorizerFns = array.append(authorizerFns, fn)
+    end
+end
+
+# Run a named authorizer. Fail-closed: an unregistered name denies.
+def runAuthorizer
+    @param name String
+    @param ctx Dictionary
+    @param argsJson String
+    @return Bool
+do
+    var allowed = false
+    var i = 0
+    for existing in authorizerNames
+        if existing == name
+            let fn = authorizerFns[i]
+            allowed = fn(ctx, argsJson)
+        end
+        i = i + 1
+    end
+    allowed
+end
+
+# The 401 envelope: authentication required. Fixed text by design.
+def rpcAuthRequired
+    @return String
+do
+    '{"ok":false,"authRequired":true,"error":"authentication required"}'
+end
+
+# The 403 envelope: authenticated but not authorized. Fixed text.
+def rpcAuthForbidden
+    @return String
+do
+    '{"ok":false,"authForbidden":true,"error":"forbidden"}'
+end
+
+# The per-endpoint gate the generated dispatch calls before the body.
+# Returns '' when the call may proceed. `public` endpoints skip the
+# call entirely (the generator emits no gate for them), so any policy
+# string reaching here requires an authenticated caller — including a
+# legacy empty policy (fail closed).
+def rpcAuthCheck
+    @param policy String
+    @param authorizerName String
+    @param ctx Dictionary
+    @param argsJson String
+    @return String
+do
+    let identity = dictionary.get(ctx, 'identity')
+    if !identity?
+        rpcAuthRequired()
+    else if authorizerName != '' and !runAuthorizer(authorizerName, ctx, argsJson)
+        rpcAuthForbidden()
+    else
+        ''
+    end
+end
+
 # Queue a cookie to attach to the current request's response. Called
 # from `signup`/`login`/`logout` (or any remote def that wants to set
 # a cookie alongside a JSON-encoded result). Queued into the current
@@ -393,7 +500,11 @@ do
                 if resultJson == ''
                     baseResp = server.json(404, rpcError('unknown function'))
                 else
-                    if string.startsWith(resultJson, '{"ok":false')
+                    if string.startsWith(resultJson, '{"ok":false,"authRequired"')
+                        baseResp = server.json(401, resultJson)
+                    else if string.startsWith(resultJson, '{"ok":false,"authForbidden"')
+                        baseResp = server.json(403, resultJson)
+                    else if string.startsWith(resultJson, '{"ok":false')
                         baseResp = server.json(200, resultJson)
                     else
                         baseResp = server.json(200, rpcOk(resultJson))
@@ -603,5 +714,95 @@ test testResolver
             body: ''
         })
         assert.isTrue(testResolver(req) != null)
+    end
+end
+
+test authorizer
+    it 'registers and replaces by name'
+        authorizer('t-admin', allowAll)
+        assert.isTrue(runAuthorizer('t-admin', {}, '[]'))
+        authorizer('t-admin', denyAll)
+        assert.isFalse(runAuthorizer('t-admin', {}, '[]'))
+    end
+end
+
+test runAuthorizer
+    it 'fails closed for unregistered names'
+        assert.isFalse(runAuthorizer('t-missing', {}, '[]'))
+    end
+end
+
+test rpcAuthRequired
+    it 'is the fixed 401 envelope'
+        assert.equals(rpcAuthRequired(), '{"ok":false,"authRequired":true,"error":"authentication required"}')
+    end
+end
+
+test rpcAuthForbidden
+    it 'is the fixed 403 envelope'
+        assert.equals(rpcAuthForbidden(), '{"ok":false,"authForbidden":true,"error":"forbidden"}')
+    end
+end
+
+test rpcAuthCheck
+    it 'rejects a missing identity with the 401 envelope'
+        let fail = rpcAuthCheck('session', '', {
+            identity: null
+        }, '[]')
+        assert.equals(fail, rpcAuthRequired())
+    end
+    it 'passes an authenticated caller with no authorizer'
+        assert.equals(rpcAuthCheck('session', '', {
+            identity: {
+                userId: 1
+            }
+        }, '[]'), '')
+    end
+    it 'rejects a failing authorizer with the 403 envelope'
+        authorizer('t-deny', denyAll)
+        let fail = rpcAuthCheck('session', 't-deny', {
+            identity: {
+                userId: 1
+            }
+        }, '[]')
+        assert.equals(fail, rpcAuthForbidden())
+    end
+    it 'passes a passing authorizer'
+        authorizer('t-allow', allowAll)
+        assert.equals(rpcAuthCheck('session', 't-allow', {
+            identity: {
+                userId: 1
+            }
+        }, '[]'), '')
+    end
+end
+
+# Authorizer stubs for the tests above.
+def allowAll
+    @param ctx Dictionary
+    @param argsJson String
+    @return Bool
+do
+    true
+end
+
+test allowAll
+    it 'allows'
+        assert.isTrue(allowAll({}, '[]'))
+    end
+end
+
+# Denying twin of allowAll.
+def denyAll
+    @param ctx Dictionary
+    @param argsJson String
+    @return Bool
+do
+    false
+end
+
+test denyAll
+    it 'denies'
+        assert.isFalse(denyAll({}, '[]'))
     end
 end
