@@ -223,6 +223,29 @@ do
     rpcContexts = dictionary.set(rpcContexts, toString(id), null)
 end
 
+var rpcInterfaceMode String = 'off'
+
+# Serving mode for GET /fai/interface (plan 133 phase 3):
+# 'off' (default — the API map is recon surface and release builds
+# should not hand it out), 'session' (authenticated callers only), or
+# 'public' (dev). Set once at startup via interfaceMode.
+
+# Configure how GET /fai/interface is served: 'off' | 'session' |
+# 'public'. Anything unrecognized is treated as 'off' (fail closed).
+def interfaceMode
+    @param mode String
+    @return Void
+do
+    rpcInterfaceMode = mode
+end
+
+# The 400 envelope: malformed/oversized args. Fixed text by design.
+def rpcBadRequest
+    @return String
+do
+    '{"ok":false,"badRequest":true,"error":"bad request"}'
+end
+
 # ── @auth enforcement (fai plan 133 phase 2) ────────────────────────
 #
 # The generated __rpcDispatch calls rpcAuthCheck BEFORE each endpoint
@@ -468,7 +491,22 @@ def handleRpcRequest
     @return HttpResponse
 do
     if request.method == 'GET' and request.path == '/fai/interface'
-        server.json(200, specJson)
+        if rpcInterfaceMode == 'public'
+            server.json(200, specJson)
+        else if rpcInterfaceMode == 'session'
+            var identity Unknown = null
+            if identityResolver?
+                let resolve = identityResolver!
+                identity = resolve(request)
+            end
+            if identity != null
+                server.json(200, specJson)
+            else
+                server.json(401, rpcAuthRequired())
+            end
+        else
+            server.json(404, rpcError('not found'))
+        end
     else
         if request.method == 'POST' and request.path == '/fai/rpc'
             let bodyStr = request.body
@@ -504,6 +542,8 @@ do
                         baseResp = server.json(401, resultJson)
                     else if string.startsWith(resultJson, '{"ok":false,"authForbidden"')
                         baseResp = server.json(403, resultJson)
+                    else if string.startsWith(resultJson, '{"ok":false,"badRequest"')
+                        baseResp = server.json(400, resultJson)
                     else if string.startsWith(resultJson, '{"ok":false')
                         baseResp = server.json(200, resultJson)
                     else
@@ -804,5 +844,36 @@ end
 test denyAll
     it 'denies'
         assert.isFalse(denyAll({}, '[]'))
+    end
+end
+
+test interfaceMode
+    it 'defaults to off and accepts overrides'
+        assert.equals(rpcInterfaceMode, 'off')
+        interfaceMode('public')
+        assert.equals(rpcInterfaceMode, 'public')
+        interfaceMode('off')
+    end
+end
+
+test rpcBadRequest
+    it 'is the fixed 400 envelope'
+        assert.equals(rpcBadRequest(), '{"ok":false,"badRequest":true,"error":"bad request"}')
+    end
+end
+
+test handleRpcRequestInterfaceGate
+    it 'serves 404 by default and 200 when public'
+        let req HttpRequest = from_dict({
+            method: 'GET'
+            path: '/fai/interface'
+            body: ''
+        })
+        let closed = handleRpcRequest(req, '{"functions":[]}', 'h', testDispatch)
+        assert.equals(closed.status, 404)
+        interfaceMode('public')
+        let open = handleRpcRequest(req, '{"functions":[]}', 'h', testDispatch)
+        assert.equals(open.status, 200)
+        interfaceMode('off')
     end
 end
