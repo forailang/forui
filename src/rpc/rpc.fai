@@ -100,6 +100,23 @@ do
     end
 end
 
+# Parse an RPC args JSON string, returning null instead of throwing on
+# malformed input. `json.parse` now raises on invalid JSON (fai), but the
+# generated `__rpcDispatch` treats malformed/oversized/wrong-arity args as a
+# 400 `badRequest` — a parse failure is a bad request, not a 500. This
+# preserves that boundary: callers check `== null` exactly as before.
+def rpcArgsOrNull
+    @param argsJson String
+    @return Unknown
+do
+    try
+        let parsed = json.parse(argsJson)
+        parsed
+    catch e
+        null
+    end
+end
+
 # Parse the hash from an RPC request body.
 def parseHash
     @param body String
@@ -685,6 +702,19 @@ test parseArgs
     it 'stringifies raw array args'
         let body = '{"fn":"f","args":["A","b@example.com","pw"]}'
         assert.equals(parseArgs(body), '["A","b@example.com","pw"]')
+    end
+end
+
+test rpcArgsOrNull
+    it 'parses a valid args array'
+        let parsed = rpcArgsOrNull('["hey"]')
+        assert.isFalse(parsed == null)
+        assert.equals(length(parsed), 1)
+    end
+    it 'returns null on malformed args instead of throwing'
+        assert.isTrue(rpcArgsOrNull('notjson') == null)
+        assert.isTrue(rpcArgsOrNull('{') == null)
+        assert.isTrue(rpcArgsOrNull('') == null)
     end
 end
 
