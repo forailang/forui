@@ -271,6 +271,226 @@ do
     '{"ok":false,"badRequest":true,"error":"bad request"}'
 end
 
+# The 403 envelope: request rejected by the CSRF / Origin guard (plan
+# 134). Fixed text by design — no detail about the check leaks.
+def rpcForbidden
+    @return String
+do
+    '{"ok":false,"forbidden":true,"error":"forbidden"}'
+end
+
+# ── CSRF: Origin allow-list (plan 134 phase 1) ──────────────────────
+#
+# A cookie-authenticated POST to /fai/rpc is CSRF-exposed: a browser
+# auto-attaches the session cookie to any same-origin request, including
+# one an attacker's page triggers. The Origin check is the cheap
+# baseline — a cross-site page sends its OWN Origin, which won't match.
+# Off until `allowOrigins` is called (so non-browser / server-to-server
+# apps are unaffected); once on, a state-changing RPC must carry an
+# Origin (or Referer) that is same-origin as the request's Host or in
+# the explicit allow-list, else 403 — BEFORE identity resolves.
+
+var rpcOriginCheck Bool = false
+
+var rpcAllowedOrigins String[] = []
+
+# Enable the Origin guard on /fai/rpc. Same-origin requests (Origin host
+# matches the request Host) are always allowed; `extra` lists additional
+# origins (e.g. a separate front-end host) as full `scheme://host[:port]`
+# strings. `allowOrigins([])` = same-origin only, the common case.
+def allowOrigins
+    @param extra String[]
+    @return Void
+do
+    rpcOriginCheck = true
+    rpcAllowedOrigins = extra
+end
+
+# The host:port portion of an Origin/Referer value (`https://a.com:8080/x`
+# -> `a.com:8080`), or '' when there is no scheme delimiter.
+def originHostPart
+    @param value String
+    @return String
+do
+    let idx = string.indexOf(value, '://')
+    if idx < 0
+        ''
+    else
+        let rest = string.slice(value, idx + 3, string.length(value))
+        let slash = string.indexOf(rest, '/')
+        if slash < 0
+            rest
+        else
+            string.slice(rest, 0, slash)
+        end
+    end
+end
+
+# Pure Origin-guard decision (testable without touching module state).
+# Same origin as the Host header passes; a listed origin passes; a present
+# but non-matching Origin fails; an absent Origin on a guarded POST fails
+# (browsers send Origin on cross-origin and same-origin fetch/form POST).
+def originAllowedFor
+    @param request HttpRequest
+    @param enabled Bool
+    @param allowed String[]
+    @return Bool
+do
+    if !enabled
+        true
+    else
+        let host = unwrap(getString(request.headers, 'host'), '')
+        var origin = unwrap(getString(request.headers, 'origin'), '')
+        if origin == ''
+            origin = unwrap(getString(request.headers, 'referer'), '')
+        end
+        if origin == ''
+            false
+        else
+            let oHost = originHostPart(origin)
+            if oHost != '' and oHost == host
+                true
+            else
+                array.contains(allowed, origin)
+            end
+        end
+    end
+end
+
+# True when the request may proceed past the Origin guard, per the live
+# `allowOrigins` config. Only enforced when the guard is on, for
+# state-changing POSTs.
+def rpcOriginAllowed
+    @param request HttpRequest
+    @return Bool
+do
+    originAllowedFor(request, rpcOriginCheck, rpcAllowedOrigins)
+end
+
+test rpcForbidden
+    it 'is the fixed 403 forbidden envelope'
+        assert.equals(rpcForbidden(), '{"ok":false,"forbidden":true,"error":"forbidden"}')
+    end
+end
+
+test originHostPart
+    it 'extracts host:port from an origin or referer'
+        assert.equals(originHostPart('https://app.com'), 'app.com')
+        assert.equals(originHostPart('http://localhost:3000/x/y'), 'localhost:3000')
+        assert.equals(originHostPart('https://app.com:8443'), 'app.com:8443')
+        assert.equals(originHostPart('notaurl'), '')
+    end
+end
+
+test originAllowedFor
+    it 'passes everything when the guard is off'
+        let req HttpRequest = from_dict({
+            method: 'POST'
+            path: '/fai/rpc'
+            body: ''
+            headers: {
+                host: 'app.com'
+            }
+        })
+        assert.isTrue(originAllowedFor(req, false, []))
+    end
+    it 'passes a same-origin request (Origin host == Host)'
+        let req HttpRequest = from_dict({
+            method: 'POST'
+            path: '/fai/rpc'
+            body: ''
+            headers: {
+                host: 'app.com'
+                origin: 'https://app.com'
+            }
+        })
+        assert.isTrue(originAllowedFor(req, true, []))
+    end
+    it 'rejects a cross-origin request'
+        let req HttpRequest = from_dict({
+            method: 'POST'
+            path: '/fai/rpc'
+            body: ''
+            headers: {
+                host: 'app.com'
+                origin: 'https://evil.example'
+            }
+        })
+        assert.isFalse(originAllowedFor(req, true, []))
+    end
+    it 'rejects a guarded POST with no Origin or Referer'
+        let req HttpRequest = from_dict({
+            method: 'POST'
+            path: '/fai/rpc'
+            body: ''
+            headers: {
+                host: 'app.com'
+            }
+        })
+        assert.isFalse(originAllowedFor(req, true, []))
+    end
+    it 'passes an explicitly allow-listed cross origin'
+        let req HttpRequest = from_dict({
+            method: 'POST'
+            path: '/fai/rpc'
+            body: ''
+            headers: {
+                host: 'api.app.com'
+                origin: 'https://front.app.com'
+            }
+        })
+        assert.isTrue(originAllowedFor(req, true, ['https://front.app.com']))
+    end
+    it 'falls back to Referer when Origin is absent'
+        let req HttpRequest = from_dict({
+            method: 'POST'
+            path: '/fai/rpc'
+            body: ''
+            headers: {
+                host: 'app.com'
+                referer: 'https://app.com/tasks'
+            }
+        })
+        assert.isTrue(originAllowedFor(req, true, []))
+    end
+end
+
+test allowOrigins
+    it 'enables the guard and records the extra origins'
+        allowOrigins(['https://front.app.com'])
+        assert.isTrue(rpcOriginCheck)
+        assert.isTrue(array.contains(rpcAllowedOrigins, 'https://front.app.com'))
+        let req HttpRequest = from_dict({
+            method: 'POST'
+            path: '/fai/rpc'
+            body: ''
+            headers: {
+                host: 'app.com'
+                origin: 'https://front.app.com'
+            }
+        })
+        assert.isTrue(rpcOriginAllowed(req))
+        # Reset so later suites see the guard off (shared module state).
+        rpcOriginCheck = false
+        rpcAllowedOrigins = []
+    end
+end
+
+test rpcOriginAllowed
+    it 'is off by default (no allowOrigins call)'
+        let req HttpRequest = from_dict({
+            method: 'POST'
+            path: '/fai/rpc'
+            body: ''
+            headers: {
+                host: 'app.com'
+                origin: 'https://evil.example'
+            }
+        })
+        assert.isTrue(rpcOriginAllowed(req))
+    end
+end
+
 # ── Pre-dispatch hook chain (fai plan 133 phase 4) ──────────────────
 #
 # Cross-cutting concerns that must be able to REJECT a call before
@@ -425,6 +645,75 @@ do
         rpcAuthForbidden()
     else
         ''
+    end
+end
+
+# Build a session cookie with safe defaults — `HttpOnly` (no JS access,
+# so an XSS bug can't read the token), `Secure` (HTTPS only), `SameSite=Lax`
+# (not sent on cross-site sub-requests), `Path=/`. This is the helper a
+# login/signup handler should use for the session credential: the safe
+# attributes are ON by default, so shipping a JS-readable / cross-site /
+# plaintext-HTTP session token takes deliberate effort instead of being the
+# accident you get from a bare `{name, value}` dict.
+#
+# `Secure` breaks plain-HTTP localhost dev (browsers drop Secure cookies over
+# HTTP); the runtime strips it only when `FAI_INSECURE_COOKIES=1` (loud,
+# dev-only — see the host cookie serializer), so production stays hardened.
+def sessionCookie
+    @param name String
+    @param value String
+    @return Cookie
+do
+    let c Cookie = from_dict({
+        name: name
+        value: value
+        path: '/'
+        httpOnly: true
+        secure: true
+        sameSite: 'Lax'
+    })
+    c
+end
+
+# Build an immediately-expired session cookie (same safe attributes, so the
+# browser matches the original and drops it) for logout.
+def expiredSessionCookie
+    @param name String
+    @return Cookie
+do
+    let c Cookie = from_dict({
+        name: name
+        value: ''
+        path: '/'
+        maxAge: 0
+        httpOnly: true
+        secure: true
+        sameSite: 'Lax'
+    })
+    c
+end
+
+test sessionCookie
+    it 'sets HttpOnly, Secure, SameSite=Lax, Path=/ by default'
+        let c = sessionCookie('fai_session', 'tok123')
+        assert.equals(c.name, 'fai_session')
+        assert.equals(c.value, 'tok123')
+        assert.isTrue(unwrap(c.httpOnly, false))
+        assert.isTrue(unwrap(c.secure, false))
+        assert.equals(unwrap(c.sameSite, ''), 'Lax')
+        assert.equals(unwrap(c.path, ''), '/')
+    end
+end
+
+test expiredSessionCookie
+    it 'expires immediately with the same safe attributes'
+        let c = expiredSessionCookie('fai_session')
+        assert.equals(c.name, 'fai_session')
+        assert.equals(c.value, '')
+        assert.equals(unwrap(c.maxAge, -1), 0)
+        assert.isTrue(unwrap(c.httpOnly, false))
+        assert.isTrue(unwrap(c.secure, false))
+        assert.equals(unwrap(c.sameSite, ''), 'Lax')
     end
 end
 
@@ -590,6 +879,11 @@ do
             let reqHash = parseHash(bodyStr)
             if specHash != '' and reqHash != specHash
                 server.json(401, rpcHashMismatch(specHash))
+            else if !rpcOriginAllowed(request)
+                # CSRF Origin guard (plan 134): reject a cross-site /
+                # origin-less state-changing POST before identity even
+                # resolves. No cookies queued, no dispatch.
+                server.json(403, rpcForbidden())
             else
                 # Per-request context (plan 133): allocate the request
                 # id and stamp THIS task inline — every task spawned
@@ -618,6 +912,8 @@ do
                     if string.startsWith(resultJson, '{"ok":false,"authRequired"')
                         baseResp = server.json(401, resultJson)
                     else if string.startsWith(resultJson, '{"ok":false,"authForbidden"')
+                        baseResp = server.json(403, resultJson)
+                    else if string.startsWith(resultJson, '{"ok":false,"forbidden"')
                         baseResp = server.json(403, resultJson)
                     else if string.startsWith(resultJson, '{"ok":false,"badRequest"')
                         baseResp = server.json(400, resultJson)
