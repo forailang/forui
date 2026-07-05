@@ -8,6 +8,8 @@ use std.json
 
 use std.string
 
+use { getCookie } from Forui.cookie
+
 # RPC Server — handles POST /fai/rpc and GET /fai/interface
 #
 # The developer provides a dispatch function that maps function names to results.
@@ -365,6 +367,127 @@ def rpcOriginAllowed
     @return Bool
 do
     originAllowedFor(request, rpcOriginCheck, rpcAllowedOrigins)
+end
+
+# ── CSRF: double-submit token (plan 134 phase 2) ────────────────────
+#
+# The stronger CSRF layer. The server issues a `fai_csrf` cookie that is
+# client-readable (NOT HttpOnly) and SameSite=Strict; the RPC client
+# echoes its value in an `X-Fai-Csrf` header. handleRpcRequest requires
+# header == cookie. A cross-site attacker page cannot READ the victim's
+# cookie (same-origin policy), so it cannot forge the header — even
+# though the browser still attaches the cookie itself. Off until
+# `requireCsrfToken` is called (native/server-to-server clients carry no
+# ambient cookie and are not CSRF-exposed).
+
+var rpcCsrfCheck Bool = false
+
+# Require a double-submit CSRF token on state-changing POST /fai/rpc.
+def requireCsrfToken
+    @return Void
+do
+    rpcCsrfCheck = true
+end
+
+# Build the CSRF token cookie. Deliberately NOT HttpOnly so the RPC
+# client JS can read it and echo it in `X-Fai-Csrf`; SameSite=Strict,
+# Secure, Path=/. Issue it at login alongside the session cookie, with a
+# fresh unpredictable `value` (see the app's token generation).
+def csrfCookie
+    @param value String
+    @return Cookie
+do
+    let c Cookie = from_dict({
+        name: 'fai_csrf'
+        value: value
+        path: '/'
+        secure: true
+        sameSite: 'Strict'
+    })
+    c
+end
+
+# Pure CSRF decision (testable without module state). Passes when the
+# check is off, or when the `X-Fai-Csrf` header is present and equals the
+# `fai_csrf` cookie.
+def csrfOkFor
+    @param request HttpRequest
+    @param enabled Bool
+    @return Bool
+do
+    if !enabled
+        true
+    else
+        let header = unwrap(getString(request.headers, 'x-fai-csrf'), '')
+        let cookie = unwrap(getCookie(request, 'fai_csrf'), '')
+        header != '' and header == cookie
+    end
+end
+
+# True when the request satisfies the live CSRF-token config.
+def rpcCsrfOk
+    @param request HttpRequest
+    @return Bool
+do
+    csrfOkFor(request, rpcCsrfCheck)
+end
+
+test csrfCookie
+    it 'is client-readable (not HttpOnly), SameSite=Strict, Secure'
+        let c = csrfCookie('tok')
+        assert.equals(c.name, 'fai_csrf')
+        assert.equals(c.value, 'tok')
+        assert.isFalse(unwrap(c.httpOnly, false))
+        assert.isTrue(unwrap(c.secure, false))
+        assert.equals(unwrap(c.sameSite, ''), 'Strict')
+    end
+end
+
+test csrfOkFor
+    it 'passes when the check is off'
+        let req HttpRequest = from_dict({
+            method: 'POST'
+            path: '/fai/rpc'
+            body: ''
+            headers: {}
+        })
+        assert.isTrue(csrfOkFor(req, false))
+    end
+    it 'passes when header matches the cookie'
+        let req HttpRequest = from_dict({
+            method: 'POST'
+            path: '/fai/rpc'
+            body: ''
+            headers: {
+                cookie: 'fai_csrf=abc123'
+                x-fai-csrf: 'abc123'
+            }
+        })
+        assert.isTrue(csrfOkFor(req, true))
+    end
+    it 'rejects a missing header'
+        let req HttpRequest = from_dict({
+            method: 'POST'
+            path: '/fai/rpc'
+            body: ''
+            headers: {
+                cookie: 'fai_csrf=abc123'
+            }
+        })
+        assert.isFalse(csrfOkFor(req, true))
+    end
+    it 'rejects a mismatched header'
+        let req HttpRequest = from_dict({
+            method: 'POST'
+            path: '/fai/rpc'
+            body: ''
+            headers: {
+                cookie: 'fai_csrf=abc123'
+                x-fai-csrf: 'WRONG'
+            }
+        })
+        assert.isFalse(csrfOkFor(req, true))
+    end
 end
 
 test rpcForbidden
@@ -883,6 +1006,10 @@ do
                 # CSRF Origin guard (plan 134): reject a cross-site /
                 # origin-less state-changing POST before identity even
                 # resolves. No cookies queued, no dispatch.
+                server.json(403, rpcForbidden())
+            else if !rpcCsrfOk(request)
+                # CSRF double-submit token guard (plan 134): the
+                # X-Fai-Csrf header must equal the fai_csrf cookie.
                 server.json(403, rpcForbidden())
             else
                 # Per-request context (plan 133): allocate the request
