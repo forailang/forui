@@ -318,12 +318,12 @@ do
     if idx < 0
         ''
     else
-        let rest = string.slice(value, idx + 3, string.length(value))
+        let rest = string.substring(value, idx + 3, length(value))
         let slash = string.indexOf(rest, '/')
         if slash < 0
             rest
         else
-            string.slice(rest, 0, slash)
+            string.substring(rest, 0, slash)
         end
     end
 end
@@ -454,37 +454,39 @@ test csrfOkFor
         assert.isTrue(csrfOkFor(req, false))
     end
     it 'passes when header matches the cookie'
+        # Build headers via set() — dict literals can't carry a hyphenated
+        # key like x-fai-csrf.
+        var h = {}
+        h = set(h, 'cookie', 'fai_csrf=abc123')
+        h = set(h, 'x-fai-csrf', 'abc123')
         let req HttpRequest = from_dict({
             method: 'POST'
             path: '/fai/rpc'
             body: ''
-            headers: {
-                cookie: 'fai_csrf=abc123'
-                x-fai-csrf: 'abc123'
-            }
+            headers: h
         })
         assert.isTrue(csrfOkFor(req, true))
     end
     it 'rejects a missing header'
+        var h = {}
+        h = set(h, 'cookie', 'fai_csrf=abc123')
         let req HttpRequest = from_dict({
             method: 'POST'
             path: '/fai/rpc'
             body: ''
-            headers: {
-                cookie: 'fai_csrf=abc123'
-            }
+            headers: h
         })
         assert.isFalse(csrfOkFor(req, true))
     end
     it 'rejects a mismatched header'
+        var h = {}
+        h = set(h, 'cookie', 'fai_csrf=abc123')
+        h = set(h, 'x-fai-csrf', 'WRONG')
         let req HttpRequest = from_dict({
             method: 'POST'
             path: '/fai/rpc'
             body: ''
-            headers: {
-                cookie: 'fai_csrf=abc123'
-                x-fai-csrf: 'WRONG'
-            }
+            headers: h
         })
         assert.isFalse(csrfOkFor(req, true))
     end
