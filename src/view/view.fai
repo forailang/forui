@@ -62,6 +62,33 @@ do
     ViewNode(kind: kind, key: '', props: {}, children: children, events: emptyEvents())
 end
 
+test testNode
+    it 'builds a minimal ViewNode of the given kind'
+        let n = testNode('HStack')
+        assert.equals(n.kind, 'HStack')
+        assert.equals(n.key, '')
+        assert.equals(array.length(n.children), 0)
+    end
+end
+
+test testNodeWithProp
+    it 'builds a ViewNode carrying a single prop'
+        let n = testNodeWithProp('Label', 'text', 'hi')
+        assert.equals(n.kind, 'Label')
+        assert.equals(getString(n.props, 'text')!, 'hi')
+    end
+end
+
+test testNodeWithChildren
+    it 'builds a ViewNode with pre-built children'
+        let child = testNode('Label')
+        let n = testNodeWithChildren('VStack', [child])
+        assert.equals(n.kind, 'VStack')
+        assert.equals(array.length(n.children), 1)
+        assert.equals(n.children[0].kind, 'Label')
+    end
+end
+
 # ── Tree building context ───────────────────────────────────────────
 # A flat stack with frame markers. Container components push a frame,
 # run the children block, then pop to collect what was registered.
