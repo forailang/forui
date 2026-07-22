@@ -4,7 +4,7 @@ use std.array
 
 use std.convert
 
-use { ViewNode, Events, ClickAction, emptyEvents, registerNode, pushFrame, popFrame, registerHandler, Children, Label, VStack, childCount, getChild } from view
+use { ViewNode, Events, ClickAction, emptyEvents, registerNode, pushFrame, popFrame, registerHandler, Children, Label, VStack, childCount, getChild, hasProp } from view
 
 use { Signal, createSignal, setValue, value, clearHookSignals } from signal
 
@@ -346,16 +346,40 @@ do
     children()
     let kids = popFrame()
     let props = set({}, 'to', to)
-    let target = to
-    let handler ClickAction = do
-        navigate(target)
+    var linkProps = props
+    var events = emptyEvents()
+    if shouldHandleLinkClick(to)
+        let target = to
+        let handler ClickAction = do
+            navigate(target)
+        end
+        let handlerId = registerHandler(handler)
+        linkProps = set(props, 'handlerId', handlerId)
+        events = Events(onClick: handler, onChange: null)
     end
-    let handlerId = registerHandler(handler)
-    let linkProps = set(props, 'handlerId', handlerId)
-    let events = Events(onClick: handler, onChange: null)
     let node = ViewNode(kind: 'Link', key: '', props: linkProps, children: kids, events: events)
     registerNode(node)
     node
+end
+
+# True when a Link target should be routed through the app router.
+def shouldHandleLinkClick
+    @param to String
+    @return Bool
+do
+    string.startsWith(to, '/') or string.startsWith(to, '#') or string.startsWith(to, '?')
+end
+
+test shouldHandleLinkClick
+    it 'handles app-local link targets'
+        assert.equals(shouldHandleLinkClick('/settings'), true)
+        assert.equals(shouldHandleLinkClick('#details'), true)
+        assert.equals(shouldHandleLinkClick('?tab=one'), true)
+    end
+    it 'leaves external link targets to the browser'
+        assert.equals(shouldHandleLinkClick('https://console.cloud.google.com/iam-admin/serviceaccounts'), false)
+        assert.equals(shouldHandleLinkClick('mailto:test@example.com'), false)
+    end
 end
 
 test splitPath
@@ -600,6 +624,15 @@ test Link
         end
         assert.equals(childCount(tree), 1)
         assert.equals(getChild(tree, 0).events.onClick?, true)
+    end
+    it 'leaves external links to the browser'
+        let link = Link('https://console.cloud.google.com/iam-admin/serviceaccounts') do
+            Label('Service accounts')
+        end
+        assert.equals(link.kind, 'Link')
+        assert.equals(getString(link.props, 'to'), 'https://console.cloud.google.com/iam-admin/serviceaccounts')
+        assert.equals(link.events.onClick?, false)
+        assert.equals(hasProp(link, 'handlerId'), false)
     end
 end
 
